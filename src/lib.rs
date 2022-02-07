@@ -45,15 +45,17 @@ mod csv_datetime_formatting {
     }
 }
 
+#[derive(Debug)]
 pub struct PriceRecord {
     ticker_symbol: String,
-    timestamp: chrono::DateTime<chrono::Utc>,
-    open_price: Currency,
-    high_price: Currency,
-    low_price: Currency,
-    close_price: Currency,
-    adj_close: Currency,
-    volume: i32,
+    timestamp: Vec<chrono::DateTime<chrono::Utc>>,
+    open_price: Vec<f64>,
+    high_price: Vec<f64>,
+    low_price: Vec<f64>,
+    close_price: Vec<f64>,
+    adj_close: Vec<f64>,
+    volume: Vec<i64>,
+    currency: Currency,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -79,11 +81,11 @@ pub fn get_prices(
     ticker_symbol: &str,
     start_datetime: chrono::DateTime<chrono::Utc>,
     end_datetime: chrono::DateTime<chrono::Utc>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(PriceRecord), Box<dyn std::error::Error>> {
     let base_url = "https://query1.finance.yahoo.com/v7/finance/download/XLK?";
     let period1 = start_datetime.timestamp();
     let period2 = end_datetime.timestamp();
-    let mut csv_vec: Vec<CsvRecord>=Vec::new();
+    let mut csv_vec: Vec<CsvRecord> = Vec::new();
 
     // Constructing the complete url string to make the request
     let url = format!(
@@ -108,7 +110,25 @@ pub fn get_prices(
         csv_vec.push(csv_record);
     }
 
-    Ok(())
+    // Constructing the PriceRecord Object
+    let price_record = PriceRecord {
+        ticker_symbol: String::from(ticker_symbol),
+        timestamp: csv_vec
+            .iter()
+            .map(|x| x.timestamp)
+            .collect::<Vec<chrono::DateTime<chrono::Utc>>>(),
+        open_price: csv_vec.iter().map(|x| x.open_price).collect::<Vec<f64>>(),
+        high_price: csv_vec.iter().map(|x| x.high_price).collect::<Vec<f64>>(),
+        low_price: csv_vec.iter().map(|x| x.low_price).collect::<Vec<f64>>(),
+        close_price: csv_vec.iter().map(|x| x.close_price).collect::<Vec<f64>>(),
+        adj_close: csv_vec.iter().map(|x| x.adj_close).collect::<Vec<f64>>(),
+        volume: csv_vec.iter().map(|x| x.volume).collect::<Vec<i64>>(),
+        currency: Currency::USD,
+    };
+
+    println!("{:?}", price_record);
+
+    Ok((price_record))
 }
 
 pub fn chrono_strptime(
@@ -154,7 +174,7 @@ mod tests {
             chrono::Utc.ymd(2022, 2, 1).and_hms(0, 0, 0),
         ) {
             Ok(i) => println!("OK"),
-            Err(e) => println!("{}",e)
+            Err(e) => println!("{}", e),
         };
         ()
     }
