@@ -92,6 +92,7 @@ pub fn get_prices(
         "{}?period1={}&period2={}&interval=1d&events=history&includeAdjustedClose=true",
         base_url, period1, period2
     );
+    println!("{}",url);
 
     // Sending the GET request
     let response_bytes = reqwest::blocking::get(url)
@@ -110,6 +111,9 @@ pub fn get_prices(
         csv_vec.push(csv_record);
     }
 
+    // Sorting the vec of CsvRecords
+    csv_vec.sort_by(|x, y| x.timestamp.cmp(&y.timestamp));
+
     // Constructing the PriceRecord Object
     let price_record = PriceRecord {
         ticker_symbol: String::from(ticker_symbol),
@@ -125,9 +129,6 @@ pub fn get_prices(
         volume: csv_vec.iter().map(|x| x.volume).collect::<Vec<i64>>(),
         currency: Currency::USD,
     };
-
-    println!("{:?}", price_record);
-
     Ok((price_record))
 }
 
@@ -154,6 +155,47 @@ pub fn chrono_strptime(
     Ok(result)
 }
 
+pub fn groupby_closing_price(price_record: PriceRecord, bin_timestamp: chrono::Duration) -> Option<()> {
+    let starting_time = match price_record.timestamp.first() {
+        Some(i) => i,
+        None => return None,
+    };
+    let ending_time = match price_record.timestamp.last() {
+        Some(i) => i,
+        None => return None,
+    };
+
+    let mut bins: Vec<chrono::DateTime<chrono::Utc>> = Vec::new();
+    let mut prev_dt = *starting_time;
+    let mut next_dt = prev_dt + bin_timestamp;
+    let mut groups: std::collections::HashMap<
+        chrono::DateTime<chrono::Utc>,
+        Vec<f64>,
+    > = std::collections::HashMap::new();
+    let mut i = 0;
+
+    while true {
+        let mut group:Vec<f64>=Vec::new();
+        while price_record.timestamp[i] < next_dt {
+            group.push(price_record.close_price[i]);
+            i+=1;
+            if i >= price_record.timestamp.len() {
+                break
+            }
+        }
+        groups.insert(prev_dt, group);
+        prev_dt = next_dt;
+        next_dt = next_dt + bin_timestamp;
+        if next_dt > *ending_time {
+            break
+        }
+    }
+
+    println!("{:?}",groups);
+
+    Some(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::{num::ParseIntError, string::ParseError};
@@ -177,6 +219,18 @@ mod tests {
             Err(e) => println!("{}", e),
         };
         ()
+    }
+
+    #[test]
+    fn test_groupby() {
+        let price_record = get_prices(
+            "XLK",
+            chrono::Utc.ymd(2022, 1, 1).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 2, 1).and_hms(0, 0, 0),
+        )
+        .unwrap();
+
+        groupby_closing_price(price_record, chrono::Duration::weeks(1));
     }
 
     // #[test]
