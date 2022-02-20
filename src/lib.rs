@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::string::ParseError;
+use std::{ops::Range, string::ParseError};
 
-use chrono::TimeZone;
+use chrono::{Datelike, TimeZone};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Currency {
     USD,
     SGD,
@@ -77,6 +77,25 @@ pub struct CsvRecord {
     volume: i64,
 }
 
+#[derive(Debug)]
+pub struct GroupedPriceRecord {
+    ticker_symbol: String,
+    groupby_duration: chrono::Duration,
+    binned_timestamps: Vec<chrono::DateTime<chrono::Utc>>,
+    grouping_indexes: Vec<std::ops::Range<usize>>,
+    open_price: Vec<Vec<f64>>,
+    high_price: Vec<Vec<f64>>,
+    low_price: Vec<Vec<f64>>,
+    close_price: Vec<Vec<f64>>,
+    adj_close: Vec<Vec<f64>>,
+    volume: Vec<Vec<i64>>,
+    open_low_pricedelta: Option<Vec<Vec<f64>>>,
+    open_high_pricedelta: Option<Vec<Vec<f64>>>,
+    prevclose_low_pricedelta: Option<Vec<Vec<f64>>>,
+    prevclose_high_pricedelta: Option<Vec<Vec<f64>>>,
+    currency: Currency,
+}
+
 pub fn get_prices(
     ticker_symbol: &str,
     start_datetime: chrono::DateTime<chrono::Utc>,
@@ -89,10 +108,9 @@ pub fn get_prices(
 
     // Constructing the complete url string to make the request
     let url = format!(
-        "{}?period1={}&period2={}&interval=1d&events=history&includeAdjustedClose=true",
+        "{}period1={}&period2={}&interval=1d&events=history&includeAdjustedClose=true",
         base_url, period1, period2
     );
-    println!("{}",url);
 
     // Sending the GET request
     let response_bytes = reqwest::blocking::get(url)
@@ -132,119 +150,195 @@ pub fn get_prices(
     Ok((price_record))
 }
 
-pub fn chrono_strptime(
-    timestamp: &str,
-) -> std::result::Result<chrono::DateTime<chrono::Utc>, Box<dyn std::error::Error>> {
-    // Function takes a string datetime formatted as "YYYY-MM-DD" and converts it to a chrono::Utc object.
-    let datetime_array_result: std::result::Result<Vec<_>, _> =
-        timestamp.split("-").map(|x| x.parse::<u32>()).collect();
+impl PriceRecord {
+    pub fn groupby_weekly(&self) -> Result<GroupedPriceRecord, Box<dyn std::error::Error>> {
+        let bin_duration = chrono::Duration::weeks(1); // Default weekly duration
 
-    let datetime_array = match datetime_array_result {
-        Ok(i) => i,
-        Err(e) => return Err(Box::new(e)),
-    };
+        // Modifying the start date to end of week
+        let first_dt = *self
+            .timestamp
+            .first()
+            .ok_or("Failed to get starting datetime.")?;
+        let start_dt = chrono::DateTime::from_utc(
+            chrono::NaiveDate::from_isoywd(first_dt.year(), first_dt.month(), chrono::Weekday::Mon)
+                .and_hms(0, 0, 0),
+            chrono::Utc,
+        );
+        let end_dt = *self
+            .timestamp
+            .last()
+            .ok_or("Failed to get ending datetime.")?;
+        let mut current_dt = start_dt;
 
-    let result = chrono::Utc
-        .ymd(
-            i32::try_from(datetime_array[0])?,
-            datetime_array[1],
-            datetime_array[2],
-        )
-        .and_hms(0, 0, 0);
+        if bin_duration > end_dt - start_dt {
+            return Err(
+                "The bin duration should be greater than the intervals between the datetimes."
+                    .into(),
+            ); // From trait implemented from Box<dyn Error>
+        }
+        if bin_duration < self.timestamp[1] - self.timestamp[0] {
+            return Err("Upsampling not supported at the moment.".into()); // From trait implemented from Box<dyn Error>
+        }
 
-    Ok(result)
-}
+        // Create the conditional for grouping
+        let mut i: usize = 0;
+        let mut group_indexes: Vec<std::ops::Range<usize>> = Vec::new();
+        let mut current_group: Vec<usize> = Vec::with_capacity(5);
+        let mut next_dt = current_dt + bin_duration;
+        let mut binned_timestamps: Vec<chrono::DateTime<chrono::Utc>> = vec![start_dt];
 
-pub fn groupby_closing_price(price_record: PriceRecord, bin_timestamp: chrono::Duration) -> Option<()> {
-    let starting_time = match price_record.timestamp.first() {
-        Some(i) => i,
-        None => return None,
-    };
-    let ending_time = match price_record.timestamp.last() {
-        Some(i) => i,
-        None => return None,
-    };
-
-    let mut bins: Vec<chrono::DateTime<chrono::Utc>> = Vec::new();
-    let mut prev_dt = *starting_time;
-    let mut next_dt = prev_dt + bin_timestamp;
-    let mut groups: std::collections::HashMap<
-        chrono::DateTime<chrono::Utc>,
-        Vec<f64>,
-    > = std::collections::HashMap::new();
-    let mut i = 0;
-
-    while true {
-        let mut group:Vec<f64>=Vec::new();
-        while price_record.timestamp[i] < next_dt {
-            group.push(price_record.close_price[i]);
-            i+=1;
-            if i >= price_record.timestamp.len() {
-                break
+        loop {
+            current_dt = self.timestamp[i];
+            if current_dt >= next_dt {
+                group_indexes.push(std::ops::Range {
+                    start: *current_group.first().unwrap(),
+                    end: *current_group.last().unwrap() + 1,
+                });
+                current_group = Vec::with_capacity(5);
+                binned_timestamps.push(next_dt);
+                next_dt = next_dt + bin_duration;
+            }
+            current_group.push(i);
+            i = i + 1;
+            if i == self.timestamp.len() {
+                if current_group.len() > 0 {
+                    group_indexes.push(std::ops::Range {
+                        start: *current_group.first().unwrap(),
+                        end: *current_group.last().unwrap() + 1,
+                    });
+                }
+                binned_timestamps.push(next_dt);
+                break;
             }
         }
-        groups.insert(prev_dt, group);
-        prev_dt = next_dt;
-        next_dt = next_dt + bin_timestamp;
-        if next_dt > *ending_time {
-            break
-        }
+
+        let result = GroupedPriceRecord {
+            ticker_symbol: self.ticker_symbol.clone(),
+            groupby_duration: bin_duration,
+            binned_timestamps: binned_timestamps,
+            grouping_indexes: group_indexes.clone(),
+            open_price: group_indexes
+                .iter()
+                .cloned()
+                .map(|x| self.open_price.get(x).unwrap().to_vec())
+                .collect::<Vec<Vec<f64>>>(),
+            low_price: group_indexes
+                .iter()
+                .cloned()
+                .map(|x| self.low_price.get(x).unwrap().to_vec())
+                .collect::<Vec<Vec<f64>>>(),
+            high_price: group_indexes
+                .iter()
+                .cloned()
+                .map(|x| self.high_price.get(x).unwrap().to_vec())
+                .collect::<Vec<Vec<f64>>>(),
+            close_price: group_indexes
+                .iter()
+                .cloned()
+                .map(|x| self.close_price.get(x).unwrap().to_vec())
+                .collect::<Vec<Vec<f64>>>(),
+            adj_close: group_indexes
+                .iter()
+                .cloned()
+                .map(|x| self.adj_close.get(x).unwrap().to_vec())
+                .collect::<Vec<Vec<f64>>>(),
+            volume: group_indexes
+                .iter()
+                .cloned()
+                .map(|x| self.volume.get(x).unwrap().to_vec())
+                .collect::<Vec<Vec<i64>>>(),
+            open_low_pricedelta: None,       // Created via builder patterns
+            open_high_pricedelta: None,      // Created via builder patterns
+            prevclose_low_pricedelta: None,  // Created via builder patterns
+            prevclose_high_pricedelta: None, // Created via builder patterns
+            currency: self.currency.clone(),
+        };
+
+        Ok(result)
     }
+}
 
-    println!("{:?}",groups);
+impl GroupedPriceRecord {
+    pub fn with_prevclose_deltas(&mut self) -> &mut Self {
+        match &self.prevclose_high_pricedelta {
+            Some(i) => {}
+            None => {
+                let prevclose_vec = self.close_price.iter().flatten().collect::<Vec<&f64>>(); // Creating the Vec object that takes ownership of the data
+                let prevclose_prices = prevclose_vec.split_last().unwrap().1; // creating a pointer to the slice object that references to the previously created vector
+                let high_vec = self.high_price.iter().flatten().collect::<Vec<&f64>>(); // Creating the Vec object that takes ownership of the data
+                let high_prices = high_vec.split_last().unwrap().1; // creating a pointer to the slice object that references to the previously created vector
 
-    Some(())
+                let mut prevclose_high_pricedelta = prevclose_prices
+                    .iter()
+                    .zip(high_prices.iter())
+                    .map(|(&&x, &&y)| x - y)
+                    .collect::<Vec<f64>>();
+                prevclose_high_pricedelta.insert(0, f64::NAN); // first record will not have a previous closing price, and thus will not be computed.
+
+                self.prevclose_high_pricedelta = Some(
+                    self.grouping_indexes
+                        .iter()
+                        .cloned()
+                        .map(|x| prevclose_high_pricedelta.get(x).unwrap().to_vec())
+                        .collect::<Vec<Vec<f64>>>(),
+                );
+            }
+        }
+
+        match &self.prevclose_low_pricedelta {
+            Some(i) => {}
+            None => {
+                let prevclose_vec = self.close_price.iter().flatten().collect::<Vec<&f64>>(); // Creating the Vec object that takes ownership of the data
+                let prevclose_prices = prevclose_vec.split_last().unwrap().1; // creating a pointer to the slice object that references to the previously created vector
+                let low_vec = self.low_price.iter().flatten().collect::<Vec<&f64>>(); // Creating the Vec object that takes ownership of the data
+                let low_prices = low_vec.split_last().unwrap().1; // creating a pointer to the slice object that references to the previously created vector
+
+                let mut prevclose_low_pricedelta = prevclose_prices
+                    .iter()
+                    .zip(low_prices.iter())
+                    .map(|(&&x, &&y)| x - y)
+                    .collect::<Vec<f64>>();
+                prevclose_low_pricedelta.insert(0, f64::NAN); // first record will not have a previous closing price, and thus will not be computed.
+
+                self.prevclose_low_pricedelta = Some(
+                    self.grouping_indexes
+                        .iter()
+                        .cloned()
+                        .map(|x| prevclose_low_pricedelta.get(x).unwrap().to_vec())
+                        .collect::<Vec<Vec<f64>>>(),
+                );
+            }
+        }
+
+        self
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{num::ParseIntError, string::ParseError};
-
     use super::*;
-
-    #[test]
-    fn test_chrono_strptime() {
-        let result = chrono_strptime("2022-02-01").unwrap();
-        assert_eq!(result, chrono::Utc.ymd(2022, 2, 1).and_hms(0, 0, 0))
-    }
+    use std::{num::ParseIntError, string::ParseError};
 
     #[test]
     fn test_get_prices() {
-        match get_prices(
-            "XLK",
-            chrono::Utc.ymd(2022, 1, 1).and_hms(0, 0, 0),
-            chrono::Utc.ymd(2022, 2, 1).and_hms(0, 0, 0),
-        ) {
-            Ok(i) => println!("OK"),
-            Err(e) => println!("{}", e),
-        };
-        ()
-    }
-
-    #[test]
-    fn test_groupby() {
         let price_record = get_prices(
             "XLK",
             chrono::Utc.ymd(2022, 1, 1).and_hms(0, 0, 0),
             chrono::Utc.ymd(2022, 2, 1).and_hms(0, 0, 0),
         )
         .unwrap();
-
-        groupby_closing_price(price_record, chrono::Duration::weeks(1));
+        println!("{:?}", [price_record]);
     }
 
-    // #[test]
-    // fn test_chrono_strptime_error_handling() {
-    //     let result = match chrono_strptime("2022-2-A") {
-    //         Ok(result) => result,
-    //         Err(e) => {
-    //             if let Ok(e) = e.downcast::<ParseIntError>() {
-    //                 println!("Provide correct datetime formatting!");
-    //                 panic!("Please ensure correct datetime format is provided!");
-    //             } else {
-    //                 panic!("Unknown error occured.");
-    //             }
-    //         }
-    // };
-    // }
+    #[test]
+    fn test_groupby_weekly() {
+        let price_record = get_prices(
+            "XLK",
+            chrono::Utc.ymd(2022, 1, 5).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 1, 28).and_hms(0, 0, 0),
+        )
+        .unwrap();
+        let grouped_price_record = price_record.groupby_weekly().unwrap();
+        println!("{:#?}", grouped_price_record);
+    }
 }
