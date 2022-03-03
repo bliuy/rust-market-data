@@ -1,12 +1,39 @@
 use serde::{Deserialize, Serialize};
-use std::{ops::Range, string::ParseError};
 
-use chrono::{Datelike, TimeZone};
+use chrono::Datelike;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Currency {
     USD,
     SGD,
+}
+
+pub enum DeltaType {
+    OpenLow,
+    HighOpen,
+    HighPrevClose,
+    PrevCloseLow,
+}
+
+pub enum MetricType {
+    HighPrice,
+    LowPrice,
+    OpenPrice,
+    ClosePrice,
+    AdjClosePrice,
+    Volume,
+    PercentageDelta(DeltaType),
+    PriceDelta(DeltaType),
+}
+
+pub enum MetricResult<'a> {
+    FloatVec(&'a Vec<Vec<f64>>),
+    IntVec(&'a Vec<Vec<i32>>),
+} // References within the enums must live as long/outlive the MetricResult enum
+
+pub enum VecVecTypes<'a> {
+    VecVecf64(&'a Vec<Vec<f64>>),
+    VecVeci32(&'a Vec<Vec<i32>>),
 }
 
 pub enum DataProvider {
@@ -54,7 +81,7 @@ pub struct PriceRecord {
     low_price: Vec<f64>,
     close_price: Vec<f64>,
     adj_close: Vec<f64>,
-    volume: Vec<i64>,
+    volume: Vec<i32>,
     currency: Currency,
 }
 
@@ -74,7 +101,7 @@ pub struct CsvRecord {
     #[serde(rename = "Adj Close")]
     adj_close: f64,
     #[serde(rename = "Volume")]
-    volume: i64,
+    volume: i32,
 }
 
 #[derive(Debug)]
@@ -88,19 +115,34 @@ pub struct GroupedPriceRecord {
     low_price: Vec<Vec<f64>>,
     close_price: Vec<Vec<f64>>,
     adj_close: Vec<Vec<f64>>,
-    volume: Vec<Vec<i64>>,
-    open_low_pricedelta: Option<Vec<Vec<f64>>>,
-    open_high_pricedelta: Option<Vec<Vec<f64>>>,
-    prevclose_low_pricedelta: Option<Vec<Vec<f64>>>,
-    prevclose_high_pricedelta: Option<Vec<Vec<f64>>>,
+    volume: Vec<Vec<i32>>,
+    open_low_percentdelta: Option<Vec<Vec<f64>>>,
+    high_open_percentdelta: Option<Vec<Vec<f64>>>,
+    prevclose_low_percentdelta: Option<Vec<Vec<f64>>>,
+    high_prevclose_percentdelta: Option<Vec<Vec<f64>>>,
     currency: Currency,
 }
+
+#[derive(Debug)]
+pub struct PriceRecordResult<'a, T> {
+    ticker_symbol: &'a String,
+    timestamp: &'a Vec<chrono::DateTime<chrono::Utc>>,
+    values: Vec<T>,
+    currency: &'a Currency,
+}
+
+// #[derive(Debug)]
+// pub struct PriceResult<T> {
+//     ticker_symbol: String,
+//     binned_timestamps: Vec<chrono::DateTime<chrono::Utc>>,
+//     results: Vec<T>,
+// }
 
 pub fn get_prices(
     ticker_symbol: &str,
     start_datetime: chrono::DateTime<chrono::Utc>,
     end_datetime: chrono::DateTime<chrono::Utc>,
-) -> Result<(PriceRecord), Box<dyn std::error::Error>> {
+) -> Result<PriceRecord, Box<dyn std::error::Error>> {
     let base_url = "https://query1.finance.yahoo.com/v7/finance/download/XLK?";
     let period1 = start_datetime.timestamp();
     let period2 = end_datetime.timestamp();
@@ -144,14 +186,14 @@ pub fn get_prices(
         low_price: csv_vec.iter().map(|x| x.low_price).collect::<Vec<f64>>(),
         close_price: csv_vec.iter().map(|x| x.close_price).collect::<Vec<f64>>(),
         adj_close: csv_vec.iter().map(|x| x.adj_close).collect::<Vec<f64>>(),
-        volume: csv_vec.iter().map(|x| x.volume).collect::<Vec<i64>>(),
+        volume: csv_vec.iter().map(|x| x.volume).collect::<Vec<i32>>(),
         currency: Currency::USD,
     };
-    Ok((price_record))
+    Ok(price_record)
 }
 
 impl PriceRecord {
-    pub fn groupby_weekly(&self) -> Result<GroupedPriceRecord, Box<dyn std::error::Error>> {
+    pub fn groupby_weekly(self) -> Result<GroupedPriceRecord, Box<dyn std::error::Error>> {
         let bin_duration = chrono::Duration::weeks(1); // Default weekly duration
 
         // Modifying the start date to end of week
@@ -213,7 +255,7 @@ impl PriceRecord {
         }
 
         let result = GroupedPriceRecord {
-            ticker_symbol: self.ticker_symbol.clone(),
+            ticker_symbol: self.ticker_symbol,
             groupby_duration: bin_duration,
             binned_timestamps: binned_timestamps,
             grouping_indexes: group_indexes.clone(),
@@ -246,77 +288,153 @@ impl PriceRecord {
                 .iter()
                 .cloned()
                 .map(|x| self.volume.get(x).unwrap().to_vec())
-                .collect::<Vec<Vec<i64>>>(),
-            open_low_pricedelta: None,       // Created via builder patterns
-            open_high_pricedelta: None,      // Created via builder patterns
-            prevclose_low_pricedelta: None,  // Created via builder patterns
-            prevclose_high_pricedelta: None, // Created via builder patterns
-            currency: self.currency.clone(),
+                .collect::<Vec<Vec<i32>>>(),
+            open_low_percentdelta: None,  // Created via builder patterns
+            high_open_percentdelta: None, // Created via builder patterns
+            prevclose_low_percentdelta: None, // Created via builder patterns
+            high_prevclose_percentdelta: None, // Created via builder patterns
+            currency: self.currency,
         };
 
         Ok(result)
     }
 }
 
-impl GroupedPriceRecord {
-    pub fn with_prevclose_deltas(&mut self) -> &mut Self {
-        match &self.prevclose_high_pricedelta {
-            Some(i) => {}
+impl<'a> GroupedPriceRecord {
+    pub fn with_prevclose_deltas(mut self) -> Self {
+        match &self.high_prevclose_percentdelta {
+            Some(_i) => {}
             None => {
                 let prevclose_vec = self.close_price.iter().flatten().collect::<Vec<&f64>>(); // Creating the Vec object that takes ownership of the data
                 let prevclose_prices = prevclose_vec.split_last().unwrap().1; // creating a pointer to the slice object that references to the previously created vector
                 let high_vec = self.high_price.iter().flatten().collect::<Vec<&f64>>(); // Creating the Vec object that takes ownership of the data
                 let high_prices = high_vec.split_last().unwrap().1; // creating a pointer to the slice object that references to the previously created vector
 
-                let mut prevclose_high_pricedelta = prevclose_prices
+                let mut high_prevclose_percentdelta = prevclose_prices
                     .iter()
                     .zip(high_prices.iter())
-                    .map(|(&&x, &&y)| x - y)
+                    .map(|(&&x, &&y)| ((y - x) / (x)) * 100.0)
                     .collect::<Vec<f64>>();
-                prevclose_high_pricedelta.insert(0, f64::NAN); // first record will not have a previous closing price, and thus will not be computed.
+                high_prevclose_percentdelta.insert(0, f64::NAN); // first record will not have a previous closing price, and thus will not be computed.
 
-                self.prevclose_high_pricedelta = Some(
+                self.high_prevclose_percentdelta = Some(
                     self.grouping_indexes
                         .iter()
                         .cloned()
-                        .map(|x| prevclose_high_pricedelta.get(x).unwrap().to_vec())
+                        .map(|x| high_prevclose_percentdelta.get(x).unwrap().to_vec())
                         .collect::<Vec<Vec<f64>>>(),
                 );
             }
         }
 
-        match &self.prevclose_low_pricedelta {
-            Some(i) => {}
+        match &self.prevclose_low_percentdelta {
+            Some(_i) => {}
             None => {
                 let prevclose_vec = self.close_price.iter().flatten().collect::<Vec<&f64>>(); // Creating the Vec object that takes ownership of the data
                 let prevclose_prices = prevclose_vec.split_last().unwrap().1; // creating a pointer to the slice object that references to the previously created vector
                 let low_vec = self.low_price.iter().flatten().collect::<Vec<&f64>>(); // Creating the Vec object that takes ownership of the data
                 let low_prices = low_vec.split_last().unwrap().1; // creating a pointer to the slice object that references to the previously created vector
 
-                let mut prevclose_low_pricedelta = prevclose_prices
+                let mut prevclose_low_percentdelta = prevclose_prices
                     .iter()
                     .zip(low_prices.iter())
-                    .map(|(&&x, &&y)| x - y)
+                    .map(|(&&x, &&y)| ((x - y) / (x)) * 100.0)
                     .collect::<Vec<f64>>();
-                prevclose_low_pricedelta.insert(0, f64::NAN); // first record will not have a previous closing price, and thus will not be computed.
+                prevclose_low_percentdelta.insert(0, f64::NAN); // first record will not have a previous closing price, and thus will not be computed.
 
-                self.prevclose_low_pricedelta = Some(
+                self.prevclose_low_percentdelta = Some(
                     self.grouping_indexes
                         .iter()
                         .cloned()
-                        .map(|x| prevclose_low_pricedelta.get(x).unwrap().to_vec())
+                        .map(|x| prevclose_low_percentdelta.get(x).unwrap().to_vec())
                         .collect::<Vec<Vec<f64>>>(),
                 );
             }
         }
-
         self
+    }
+
+    pub fn get_metric(
+        &self,
+        metric: MetricType,
+    ) -> Result<VecVecTypes, Box<dyn std::error::Error>> {
+        let result = match metric {
+            MetricType::OpenPrice => Ok(VecVecTypes::VecVecf64(&self.open_price)),
+            MetricType::LowPrice => Ok(VecVecTypes::VecVecf64(&self.low_price)),
+            MetricType::HighPrice => Ok(VecVecTypes::VecVecf64(&self.high_price)),
+            MetricType::ClosePrice => Ok(VecVecTypes::VecVecf64(&self.close_price)),
+            MetricType::AdjClosePrice => Ok(VecVecTypes::VecVecf64(&self.adj_close)),
+            MetricType::Volume => Ok(VecVecTypes::VecVeci32(&self.volume)),
+            MetricType::PercentageDelta(delta_type) => match delta_type {
+                DeltaType::HighOpen => match &self.high_open_percentdelta {
+                    Some(v) => Ok(VecVecTypes::VecVecf64(v)),
+                    None => Err("The High Open percentage delta has not been calculated.".into()),
+                },
+                DeltaType::OpenLow => match &self.open_low_percentdelta {
+                    Some(v) => Ok(VecVecTypes::VecVecf64(v)),
+                    None => Err("The Open Low percentage delta has not been calculated.".into()),
+                },
+                DeltaType::HighPrevClose => match &self.high_prevclose_percentdelta {
+                    Some(v) => Ok(VecVecTypes::VecVecf64(v)),
+                    None => {
+                        Err("The High PrevClose percentage delta has not been calculated.".into())
+                    }
+                },
+                DeltaType::PrevCloseLow => match &self.prevclose_low_percentdelta {
+                    Some(v) => Ok(VecVecTypes::VecVecf64(v)),
+                    None => Err("The PrevClose percentage delta has not been calculated.".into()),
+                },
+            },
+            _ => Err("Not implemented!".into()),
+        };
+
+        result
+    } // Returns a reference to the various vec fields within the GroupedPriceRecord Struct
+
+    pub fn max(
+        &self,
+        metric: MetricType,
+    ) -> Result<PriceRecordResult<f64>, Box<dyn std::error::Error>> {
+        fn aggregation_function<T>(vecs: &Vec<Vec<T>>) -> Vec<T>
+        // Returns an owned type
+        where
+            T: PartialOrd + Copy,
+        {
+            let result = vecs
+                .iter() // Returns &Vec<T>, .iter() method will return &elements
+                .map(|x| x.iter().min_by(|&a, &b| a.partial_cmp(b).unwrap()).unwrap())
+                .copied() // use .copied() instead of .cloned() as it's a cheaper operation
+                .collect(); // No need for turbofish since the returned type can be deduced
+
+            result
+        }
+
+        let ticker_symbol = &self.ticker_symbol;
+        let timestamp = &self.binned_timestamps;
+        let currency = &self.currency;
+        let values = match self.get_metric(metric)? {
+            VecVecTypes::VecVeci32(v) => aggregation_function(v)
+                .iter()
+                .map(|&x| f64::try_from(x).unwrap())
+                .collect::<Vec<f64>>(),
+            VecVecTypes::VecVecf64(v) => aggregation_function(v),
+        };
+
+        let result = PriceRecordResult {
+            ticker_symbol: ticker_symbol,
+            timestamp: timestamp,
+            values: values,
+            currency: currency,
+        };
+
+        Ok(result)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
     use std::{num::ParseIntError, string::ParseError};
 
     #[test]
@@ -340,5 +458,34 @@ mod tests {
         .unwrap();
         let grouped_price_record = price_record.groupby_weekly().unwrap();
         println!("{:#?}", grouped_price_record);
+    }
+
+    #[test]
+    fn test_groupby_weekly_with_prevclose_deltas() {
+        let price_record = get_prices(
+            "XLK",
+            chrono::Utc.ymd(2022, 1, 5).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 1, 28).and_hms(0, 0, 0),
+        )
+        .unwrap();
+        let grouped_price_record = price_record
+            .groupby_weekly()
+            .unwrap()
+            .with_prevclose_deltas();
+        // let grouped_price_record = grouped_price_record.with_prevclose_deltas();
+        println!("{:#?}", grouped_price_record);
+    }
+
+    #[test]
+    fn test_max_function() {
+        let price_record = get_prices(
+            "XLK",
+            chrono::Utc.ymd(2022, 1, 5).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 1, 28).and_hms(0, 0, 0),
+        )
+        .unwrap();
+        let grouped_price_record = price_record.groupby_weekly().unwrap();
+        let price_record_result = grouped_price_record.max(MetricType::OpenPrice).unwrap();
+        println!("{:#?}", price_record_result);
     }
 }
