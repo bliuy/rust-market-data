@@ -404,7 +404,7 @@ impl<'a> GroupedPriceRecord {
         {
             let result = vecs
                 .iter() // Returns &Vec<T>, .iter() method will return &elements
-                .map(|x| x.iter().min_by(|&a, &b| a.partial_cmp(b).unwrap()).unwrap())
+                .map(|x| x.iter().max_by(|&a, &b| a.partial_cmp(b).unwrap()).unwrap())
                 .copied() // use .copied() instead of .cloned() as it's a cheaper operation
                 .collect(); // No need for turbofish since the returned type can be deduced
 
@@ -449,9 +449,9 @@ impl<'a> GroupedPriceRecord {
                 .map(|x| {
                     x.iter()
                         .map(|&y| -> f64 {
-                            y.into()
+                            y.into() / count
                         })
-                        .sum::<f64>() / count
+                        .sum::<f64>() 
                 })
                 .collect::<Vec<f64>>();
 
@@ -533,6 +533,19 @@ mod tests {
         .unwrap();
         let grouped_price_record = price_record.groupby_weekly().unwrap();
         let price_record_result = grouped_price_record.max(MetricType::OpenPrice).unwrap();
+        println!("{:#?}", price_record_result);
+    }
+
+    #[test]
+    fn test_avg_function() {
+        let price_record = get_prices(
+            "XLK",
+            chrono::Utc.ymd(2022, 1, 5).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 1, 28).and_hms(0, 0, 0),
+        )
+        .unwrap();
+        let grouped_price_record = price_record.groupby_weekly().unwrap();
+        let price_record_result = grouped_price_record.avg(MetricType::OpenPrice).unwrap();
         println!("{:#?}", price_record_result);
     }
 }
