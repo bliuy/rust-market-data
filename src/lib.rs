@@ -133,13 +133,6 @@ pub struct PriceRecordResult<'a, T> {
     currency: &'a Currency,
 }
 
-// #[derive(Debug)]
-// pub struct PriceResult<T> {
-//     ticker_symbol: String,
-//     binned_timestamps: Vec<chrono::DateTime<chrono::Utc>>,
-//     results: Vec<T>,
-// }
-
 pub fn get_prices(
     ticker_symbol: &str,
     start_datetime: chrono::DateTime<chrono::Utc>,
