@@ -145,15 +145,15 @@ pub fn get_prices(
     start_datetime: chrono::DateTime<chrono::Utc>,
     end_datetime: chrono::DateTime<chrono::Utc>,
 ) -> Result<PriceRecord, Box<dyn std::error::Error>> {
-    let base_url = "https://query1.finance.yahoo.com/v7/finance/download/XLK?";
+    let base_url = "https://query1.finance.yahoo.com/v7/finance/download";
     let period1 = start_datetime.timestamp();
     let period2 = end_datetime.timestamp();
     let mut csv_vec: Vec<CsvRecord> = Vec::new();
 
     // Constructing the complete url string to make the request
     let url = format!(
-        "{}period1={}&period2={}&interval=1d&events=history&includeAdjustedClose=true",
-        base_url, period1, period2
+        "{}/{}?period1={}&period2={}&interval=1d&events=history&includeAdjustedClose=true",
+        base_url, ticker_symbol ,period1, period2
     );
 
     // Sending the GET request
@@ -204,8 +204,12 @@ impl PriceRecord {
             .first()
             .ok_or("Failed to get starting datetime.")?;
         let start_dt = chrono::DateTime::from_utc(
-            chrono::NaiveDate::from_isoywd(first_dt.year(), first_dt.month(), chrono::Weekday::Mon)
-                .and_hms(0, 0, 0),
+            chrono::NaiveDate::from_isoywd(
+                first_dt.year(),
+                first_dt.iso_week().week(),
+                chrono::Weekday::Mon,
+            )
+            .and_hms(0, 0, 0),
             chrono::Utc,
         );
         let end_dt = *self
@@ -323,7 +327,15 @@ impl<'a> GroupedPriceRecord {
                     self.grouping_indexes
                         .iter()
                         .cloned()
-                        .map(|x| high_prevclose_percentdelta.get(x).unwrap().to_vec())
+                        .map(|x| {
+                            high_prevclose_percentdelta
+                                .get(x)
+                                .unwrap()
+                                .iter()
+                                .copied()
+                                .filter(|y| !y.is_nan())
+                                .collect::<Vec<f64>>()
+                        })
                         .collect::<Vec<Vec<f64>>>(),
                 );
             }
@@ -348,7 +360,15 @@ impl<'a> GroupedPriceRecord {
                     self.grouping_indexes
                         .iter()
                         .cloned()
-                        .map(|x| prevclose_low_percentdelta.get(x).unwrap().to_vec())
+                        .map(|x| {
+                            prevclose_low_percentdelta
+                                .get(x)
+                                .unwrap()
+                                .iter()
+                                .copied()
+                                .filter(|y| !y.is_nan())
+                                .collect::<Vec<f64>>()
+                        })
                         .collect::<Vec<Vec<f64>>>(),
                 );
             }
@@ -508,8 +528,8 @@ mod tests {
     fn test_groupby_weekly_with_prevclose_deltas() {
         let price_record = get_prices(
             "XLK",
-            chrono::Utc.ymd(2022, 1, 5).and_hms(0, 0, 0),
-            chrono::Utc.ymd(2022, 1, 28).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 2, 1).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 3, 1).and_hms(0, 0, 0),
         )
         .unwrap();
         let grouped_price_record = price_record
@@ -523,13 +543,18 @@ mod tests {
     #[test]
     fn test_max_function() {
         let price_record = get_prices(
-            "XLK",
+            "EFA",
             chrono::Utc.ymd(2022, 1, 5).and_hms(0, 0, 0),
             chrono::Utc.ymd(2022, 1, 28).and_hms(0, 0, 0),
         )
         .unwrap();
-        let grouped_price_record = price_record.groupby_weekly().unwrap();
-        let price_record_result = grouped_price_record.max(MetricType::OpenPrice).unwrap();
+        let grouped_price_record = price_record
+            .groupby_weekly()
+            .unwrap()
+            .with_prevclose_deltas();
+        let price_record_result = grouped_price_record
+            .max(MetricType::PercentageDelta(DeltaType::PrevCloseLow))
+            .unwrap();
         println!("{:#?}", price_record_result);
     }
 
