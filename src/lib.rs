@@ -1,3 +1,5 @@
+
+
 use serde::{Deserialize, Serialize};
 
 use chrono::Datelike;
@@ -65,10 +67,10 @@ mod csv_datetime_formatting {
     {
         let mut s = String::deserialize(deserializer)?;
         s.push_str(" 00:00:00");
-        let result = chrono::Utc
+
+        chrono::Utc
             .datetime_from_str(&s, DESERIALIZE_DATETIME_FORMAT_STRING)
-            .map_err(serde::de::Error::custom);
-        result
+            .map_err(serde::de::Error::custom)
     }
 }
 
@@ -241,9 +243,9 @@ impl PriceRecord {
                 next_dt = next_dt + bin_duration;
             }
             current_group.push(i);
-            i = i + 1;
+            i += 1;
             if i == self.timestamp.len() {
-                if current_group.len() > 0 {
+                if !current_group.is_empty() {
                     group_indexes.push(std::ops::Range {
                         start: *current_group.first().unwrap(),
                         end: *current_group.last().unwrap() + 1,
@@ -257,7 +259,7 @@ impl PriceRecord {
         let result = GroupedPriceRecord {
             ticker_symbol: self.ticker_symbol,
             groupby_duration: bin_duration,
-            binned_timestamps: binned_timestamps,
+            binned_timestamps,
             grouping_indexes: group_indexes.clone(),
             open_price: group_indexes
                 .iter()
@@ -421,12 +423,58 @@ impl<'a> GroupedPriceRecord {
         };
 
         let result = PriceRecordResult {
-            ticker_symbol: ticker_symbol,
-            timestamp: timestamp,
-            values: values,
-            currency: currency,
+            ticker_symbol,
+            timestamp,
+            values,
+            currency,
         };
 
+        Ok(result)
+    }
+
+    pub fn avg(
+        &self,
+        metric: MetricType,
+    ) -> Result<PriceRecordResult<f64>, Box<dyn std::error::Error>> {
+        fn aggregation_function<T>(
+            vecs: &Vec<Vec<T>>,
+        ) -> Result<Vec<f64>, Box<dyn std::error::Error>>
+        where
+            T: Into<f64> + Copy,
+        {
+            use conv::ValueFrom; // Allows for failable conversion from usize to f64
+            let count = f64::value_from(vecs.len())?;
+            let result = vecs
+                .iter()
+                .map(|x| {
+                    x.iter()
+                        .map(|&y| -> f64 {
+                            y.into()
+                        })
+                        .sum::<f64>() / count
+                })
+                .collect::<Vec<f64>>();
+
+            Ok(result)
+        }
+        let ticker_symbol = &self.ticker_symbol;
+        let timestamp = &self.binned_timestamps;
+        let currency = &self.currency;
+        let values = match self.get_metric(metric)? {
+            VecVecTypes::VecVecf64(v) => {
+                aggregation_function(v)?
+            },
+            VecVecTypes::VecVeci32(v) => {
+                aggregation_function(v)?
+            }
+        };
+        
+        let result = PriceRecordResult {
+            ticker_symbol,
+            timestamp,
+            values,
+            currency,
+        };
         Ok(result)
     }
 }
@@ -435,7 +483,6 @@ impl<'a> GroupedPriceRecord {
 mod tests {
     use super::*;
     use chrono::TimeZone;
-    use std::{num::ParseIntError, string::ParseError};
 
     #[test]
     fn test_get_prices() {
