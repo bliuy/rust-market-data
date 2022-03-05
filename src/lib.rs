@@ -1,4 +1,4 @@
-
+use std::error::Error;
 
 use serde::{Deserialize, Serialize};
 
@@ -443,32 +443,29 @@ impl<'a> GroupedPriceRecord {
             T: Into<f64> + Copy,
         {
             use conv::ValueFrom; // Allows for failable conversion from usize to f64
-            let count = f64::value_from(vecs.len())?;
-            let result = vecs
+            let result: Result<Vec<f64>, Box<dyn Error>> = vecs
                 .iter()
-                .map(|x| {
-                    x.iter()
-                        .map(|&y| -> f64 {
-                            y.into() / count
-                        })
-                        .sum::<f64>() 
+                .map(|x| -> Result<f64, Box<dyn Error>> {
+                    let count = f64::value_from(x.len())?;
+                    let result = x
+                        .iter()
+                        .copied()
+                        .map(|y| -> f64 { Into::<f64>::into(y) / count })
+                        .sum::<f64>();
+                    Ok(result)
                 })
-                .collect::<Vec<f64>>();
+                .collect();
 
-            Ok(result)
+            result
         }
         let ticker_symbol = &self.ticker_symbol;
         let timestamp = &self.binned_timestamps;
         let currency = &self.currency;
         let values = match self.get_metric(metric)? {
-            VecVecTypes::VecVecf64(v) => {
-                aggregation_function(v)?
-            },
-            VecVecTypes::VecVeci32(v) => {
-                aggregation_function(v)?
-            }
+            VecVecTypes::VecVecf64(v) => aggregation_function(v)?,
+            VecVecTypes::VecVeci32(v) => aggregation_function(v)?,
         };
-        
+
         let result = PriceRecordResult {
             ticker_symbol,
             timestamp,
