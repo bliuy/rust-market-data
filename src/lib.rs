@@ -1,8 +1,9 @@
-use std::error::Error;
+use std::{error::Error, panic};
 
 use serde::{Deserialize, Serialize};
 
 use chrono::Datelike;
+mod sorting;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Currency {
@@ -146,7 +147,7 @@ pub fn get_prices(
     // Constructing the complete url string to make the request
     let url = format!(
         "{}/{}?period1={}&period2={}&interval=1d&events=history&includeAdjustedClose=true",
-        base_url, ticker_symbol ,period1, period2
+        base_url, ticker_symbol, period1, period2
     );
 
     // Sending the GET request
@@ -487,6 +488,41 @@ impl<'a> GroupedPriceRecord {
         };
         Ok(result)
     }
+
+    pub fn open_close_delta(&self) -> Result<PriceRecordResult<f64>, Box<dyn std::error::Error>> {
+        let open_price_vec = match self.get_metric(MetricType::OpenPrice)? {
+            VecVecTypes::VecVecf64(i) => i,
+            _ => panic!("This should be unreachable, as the Open Price must always be present."),
+        };
+        let close_price_vec = match self.get_metric(MetricType::ClosePrice)? {
+            VecVecTypes::VecVecf64(i) => i,
+            _ => panic!("This should be unreachable, as the Close Price must always be present."),
+        };
+        let values = open_price_vec
+            .iter()
+            .zip(close_price_vec)
+            .map(|(x, y)| {
+                let a = x
+                    .first()
+                    .expect("Cannot get the first element of the Open Price Vector");
+                let b = y
+                    .last()
+                    .expect("Cannot get the last element of the Close Price Vector");
+                ((b - a) * 100.0) / a
+            })
+            .collect::<Vec<f64>>();
+
+        let ticker_symbol = &self.ticker_symbol;
+        let timestamp = &self.binned_timestamps;
+        let currency = &self.currency;
+        let result = PriceRecordResult {
+            ticker_symbol,
+            timestamp,
+            values,
+            currency,
+        };
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
@@ -536,9 +572,9 @@ mod tests {
     #[test]
     fn test_max_function() {
         let price_record = get_prices(
-            "EFA",
-            chrono::Utc.ymd(2022, 1, 5).and_hms(0, 0, 0),
-            chrono::Utc.ymd(2022, 1, 28).and_hms(0, 0, 0),
+            "XLK",
+            chrono::Utc.ymd(2021, 1, 1).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 3, 1).and_hms(0, 0, 0),
         )
         .unwrap();
         let grouped_price_record = price_record
@@ -546,7 +582,7 @@ mod tests {
             .unwrap()
             .with_prevclose_deltas();
         let price_record_result = grouped_price_record
-            .max(MetricType::PercentageDelta(DeltaType::PrevCloseLow))
+            .max(MetricType::PercentageDelta(DeltaType::HighPrevClose))
             .unwrap();
         println!("{:#?}", price_record_result);
     }
