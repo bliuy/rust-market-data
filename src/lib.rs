@@ -489,7 +489,7 @@ impl<'a> GroupedPriceRecord {
         Ok(result)
     }
 
-    pub fn open_close_delta(&self) -> Result<PriceRecordResult<f64>, Box<dyn std::error::Error>> {
+    pub fn open_close_percentage_delta(&self) -> Result<PriceRecordResult<f64>, Box<dyn std::error::Error>> {
         let open_price_vec = match self.get_metric(MetricType::OpenPrice)? {
             VecVecTypes::VecVecf64(i) => i,
             _ => panic!("This should be unreachable, as the Open Price must always be present."),
@@ -597,6 +597,19 @@ mod tests {
         .unwrap();
         let grouped_price_record = price_record.groupby_weekly().unwrap();
         let price_record_result = grouped_price_record.avg(MetricType::OpenPrice).unwrap();
+        println!("{:#?}", price_record_result);
+    }
+
+    #[test]
+    fn test_open_close_delta_function() {
+        let price_record = get_prices(
+            "XLK",
+            chrono::Utc.ymd(2022, 1, 1).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 3, 12).and_hms(0, 0, 0),
+        )
+        .unwrap();
+        let grouped_price_record = price_record.groupby_weekly().unwrap();
+        let price_record_result = grouped_price_record.open_close_percentage_delta().unwrap();
         println!("{:#?}", price_record_result);
     }
 }
