@@ -26,10 +26,12 @@ pub struct Heap<T> {
 
 impl<T> Heap<T>
 where
-    T: PartialOrd + Copy,
+    T: PartialOrd + Copy + From<bool> + Debug,
 {
     pub fn new() -> Self {
-        Heap { queue: Vec::new() }
+        let mut result: Heap<T> = Heap { queue: Vec::new() };
+        result.queue.push(T::from(false));
+        result
     }
 
     pub fn len(&self) -> usize {
@@ -40,13 +42,13 @@ where
         if n == 1 {
             Err("No possible parent nodes".into())
         } else {
-            Ok(n.wrapping_div_euclid(2))
+            Ok(n.wrapping_div(2))
         }
     }
 
-    pub fn child_index(&self, n: usize) -> Result<usize, Box<dyn std::error::Error>> {
-        if n * 2 >= self.queue.len() - 1 {
-            Err("No child nodes found.".into())
+    pub fn subnode_index(&self, n: usize) -> Result<usize, Box<dyn std::error::Error>> {
+        if (n * 2) + 1 > self.queue.len() {
+            Err("No subnodes found.".into())
         } else {
             Ok(n * 2)
         }
@@ -54,17 +56,15 @@ where
 
     pub fn bubble_up(&mut self, n: usize) {
         if n <= 1 {
-             // Cannot bubble up anymore
         } else {
             let parent_n = match self.parent_index(n) {
                 Ok(i) => i,
-                Err(_e) => return ,
+                Err(_e) => return,
             };
             if self.queue[parent_n] > self.queue[n] {
                 self.queue.swap(parent_n, n);
                 self.bubble_up(parent_n);
             } else {
-                
             }
         }
     }
@@ -78,26 +78,34 @@ where
     }
 
     pub fn bubble_down(&mut self, n: usize) {
-        let child_n = match self.child_index(n) {
+        let first_subnode = match self.subnode_index(n) {
             Ok(i) => i,
-            Err(_e) => return ,
+            Err(_e) => return,
         };
-        let child_n_alt = child_n + 1;
-        // if child_n_alt + 1 > self.queue.len() {
-        //     return ();
-        // }s
+        let second_subnode = first_subnode + 1;
+        let mut next_index: usize = n;
 
-        // Checking the first child node
-        if self.queue[n] > self.queue[child_n] {
-            self.queue.swap(n, child_n);
-            self.bubble_down(child_n);
-        } else if (child_n_alt + 1 > self.queue.len()) && (self.queue[n] > self.queue[child_n_alt])
-        {
-            self.queue.swap(n, child_n_alt);
-            self.bubble_down(child_n_alt)
-        } else {
-            
+        // Checking against the first node
+        if first_subnode + 1 <= self.queue.len(){
+            if self.queue[first_subnode] < self.queue[next_index]{
+                next_index = first_subnode;
+            }
         }
+        
+        // Checking against the second node
+        if second_subnode + 1 <= self.queue.len(){
+            if self.queue[second_subnode] < self.queue[next_index]{
+                next_index = second_subnode;
+            }
+        }
+
+        // Swapping the minimum index with the original index
+        if next_index != n {
+            self.queue.swap(next_index, n);
+            self.bubble_down(next_index);
+        } else{
+        }
+
     }
 
     pub fn extract_min(&mut self) -> Result<T, Box<dyn Error>> {
@@ -221,7 +229,6 @@ mod tests {
             49147, 43033, 25096, 53739, 58789, 13886, 49525, 19517,
         ];
         let mut heap: Heap<i32> = Heap::new();
-        heap.queue.push(0);
         for num in x {
             heap.insert(num);
         }
