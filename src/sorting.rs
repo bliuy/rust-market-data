@@ -216,7 +216,7 @@ mod tests {
 
     #[test]
     fn heapsort_test() {
-        let mut x = vec![
+        let x = vec![
             86046, 44557, 25526, 25635, 9871, 77256, 30315, 44836, 69870, 88303, 41515, 35741,
             49147, 43033, 25096, 53739, 58789, 13886, 49525, 19517,
         ];
@@ -227,7 +227,7 @@ mod tests {
         }
 
         let mut x: i32;
-        for i in 0..heap.queue.len() - 1 {
+        for _i in 0..heap.queue.len() - 1 {
             x = heap.extract_min().unwrap();
             dbg!(x);
         }
