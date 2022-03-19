@@ -1,4 +1,7 @@
+use Market_Analysis::PriceRecordResult;
+
 
 fn main() {
-    println!("Hello World!")
+    // Reading the values from the std input
+    
 }
