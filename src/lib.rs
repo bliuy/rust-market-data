@@ -153,8 +153,7 @@ pub fn get_prices(
     // Sending the GET request
     let response_bytes = reqwest::blocking::get(url)
         .expect("GET request failed!")
-        .bytes()
-        .unwrap()
+        .bytes()?
         .into_iter()
         .collect::<Vec<u8>>(); // Collecting into a byte array
 
@@ -169,6 +168,11 @@ pub fn get_prices(
 
     // Sorting the vec of CsvRecords
     csv_vec.sort_by(|x, y| x.timestamp.cmp(&y.timestamp));
+
+    // Returning an Error if there is no CsvRecords to be read
+    if csv_vec.len() == 0 {
+        return Err("No data returned for the provided ticker symbol.".into())
+    }
 
     // Constructing the PriceRecord Object
     let price_record = PriceRecord {
@@ -489,14 +493,16 @@ impl<'a> GroupedPriceRecord {
         Ok(result)
     }
 
-    pub fn open_close_percentage_delta(&self) -> Result<PriceRecordResult<f64>, Box<dyn std::error::Error>> {
+    pub fn open_close_percentage_delta(
+        &self,
+    ) -> Result<PriceRecordResult<f64>, Box<dyn std::error::Error>> {
         let open_price_vec = match self.get_metric(MetricType::OpenPrice)? {
             VecVecTypes::VecVecf64(i) => i,
-            _ => panic!("This should be unreachable, as the Open Price must always be present."),
+            _ => unreachable!("This should be unreachable, as the Open Price must always be present."),
         };
         let close_price_vec = match self.get_metric(MetricType::ClosePrice)? {
             VecVecTypes::VecVecf64(i) => i,
-            _ => panic!("This should be unreachable, as the Close Price must always be present."),
+            _ => unreachable!("This should be unreachable, as the Close Price must always be present."),
         };
         let values = open_price_vec
             .iter()
@@ -533,7 +539,7 @@ mod tests {
     #[test]
     fn test_get_prices() {
         let price_record = get_prices(
-            "XLK",
+            "XLKdfvsd",
             chrono::Utc.ymd(2022, 1, 1).and_hms(0, 0, 0),
             chrono::Utc.ymd(2022, 2, 1).and_hms(0, 0, 0),
         )
@@ -573,18 +579,20 @@ mod tests {
     fn test_max_function() {
         let price_record = get_prices(
             "XLK",
-            chrono::Utc.ymd(2021, 1, 1).and_hms(0, 0, 0),
-            chrono::Utc.ymd(2022, 3, 1).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 1, 1).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 3, 15).and_hms(0, 0, 0),
         )
         .unwrap();
         let grouped_price_record = price_record
             .groupby_weekly()
             .unwrap()
             .with_prevclose_deltas();
-        let price_record_result = grouped_price_record
+        let mut price_record_result = grouped_price_record
             .max(MetricType::PercentageDelta(DeltaType::HighPrevClose))
             .unwrap();
-        println!("{:#?}", price_record_result);
+        let percentiles = vec![0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0];
+        let percentile_result = sorting::percentile(&percentiles, &mut price_record_result.values);
+        println!("{:#?}", percentile_result);
     }
 
     #[test]
@@ -611,5 +619,20 @@ mod tests {
         let grouped_price_record = price_record.groupby_weekly().unwrap();
         let price_record_result = grouped_price_record.open_close_percentage_delta().unwrap();
         println!("{:#?}", price_record_result);
+    }
+
+    #[test]
+    fn testing_percentile_function() {
+        let price_record = get_prices(
+            "XLK",
+            chrono::Utc.ymd(2021, 1, 1).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 3, 15).and_hms(0, 0, 0),
+        )
+        .unwrap();
+        let grouped_price_record = price_record.groupby_weekly().unwrap();
+        let mut price_record_result = grouped_price_record.open_close_percentage_delta().unwrap();
+        let percentiles = vec![0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0];
+        let percentile_result = sorting::percentile(&percentiles, &mut price_record_result.values);
+        println!("{:#?}", percentile_result);
     }
 }
