@@ -1,4 +1,4 @@
-use std::{error::Error, panic};
+use std::{error::Error};
 
 use serde::{Deserialize, Serialize};
 
@@ -170,7 +170,7 @@ pub fn get_prices(
     csv_vec.sort_by(|x, y| x.timestamp.cmp(&y.timestamp));
 
     // Returning an Error if there is no CsvRecords to be read
-    if csv_vec.len() == 0 {
+    if csv_vec.is_empty() {
         return Err("No data returned for the provided ticker symbol.".into())
     }
 

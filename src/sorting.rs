@@ -38,38 +38,38 @@ where
 
     pub fn parent_index(&self, n: usize) -> Result<usize, Box<dyn std::error::Error>> {
         if n == 1 {
-            return Err("No possible parent nodes".into());
+            Err("No possible parent nodes".into())
         } else {
-            return Ok(n.wrapping_div_euclid(2));
+            Ok(n.wrapping_div_euclid(2))
         }
     }
 
     pub fn child_index(&self, n: usize) -> Result<usize, Box<dyn std::error::Error>> {
         if n * 2 >= self.queue.len() - 1 {
-            return Err("No child nodes found.".into());
+            Err("No child nodes found.".into())
         } else {
-            return Ok(n * 2);
+            Ok(n * 2)
         }
     }
 
-    pub fn bubble_up(&mut self, n: usize) -> () {
+    pub fn bubble_up(&mut self, n: usize) {
         if n <= 1 {
-            return (); // Cannot bubble up anymore
+             // Cannot bubble up anymore
         } else {
             let parent_n = match self.parent_index(n) {
                 Ok(i) => i,
-                Err(e) => return (),
+                Err(_e) => return ,
             };
             if self.queue[parent_n] > self.queue[n] {
                 self.queue.swap(parent_n, n);
                 self.bubble_up(parent_n);
             } else {
-                return ();
+                
             }
         }
     }
 
-    pub fn insert(&mut self, v: T) -> () {
+    pub fn insert(&mut self, v: T) {
         self.queue.push(v);
         let new_n = self.queue.len();
         if new_n > 1 {
@@ -77,10 +77,10 @@ where
         }
     }
 
-    pub fn bubble_down(&mut self, n: usize) -> () {
+    pub fn bubble_down(&mut self, n: usize) {
         let child_n = match self.child_index(n) {
             Ok(i) => i,
-            Err(e) => return (),
+            Err(_e) => return ,
         };
         let child_n_alt = child_n + 1;
         // if child_n_alt + 1 > self.queue.len() {
@@ -96,7 +96,7 @@ where
             self.queue.swap(n, child_n_alt);
             self.bubble_down(child_n_alt)
         } else {
-            return ();
+            
         }
     }
 
@@ -193,6 +193,7 @@ where
     result
 }
 
+#[cfg(test)]
 mod tests {
 
     use super::*;
