@@ -1,6 +1,4 @@
 //! Objective: The main purpose of this module is to provide connectivity to various data sources to pull data from.
-
-
 use super::enums;
 use super::errors;
 use super::parsers;
@@ -74,7 +72,7 @@ fn source_yahoo_finance<'a>(
     // Parsing the response bytes array into a csv reader
     let csv_reader = csv::ReaderBuilder::new().from_reader(&*response_bytes);
 
-    let _records = csv_reader
+    let records = csv_reader
         .into_deserialize()
         .filter_map(|raw_record| match raw_record {
             Ok(rec) => {
