@@ -1,11 +1,11 @@
 //! Objective: The main purpose of this module is to provide connectivity to various data sources to pull data from.
+use std::sync::mpsc::Receiver;
+
 use super::enums;
 use super::errors;
 use super::parsers;
 use super::requests;
-use chrono;
-use serde;
-use serde::Deserialize;
+use csv;
 
 struct TickerInfo<'a> {
     ticker_symbol: &'a str,
@@ -35,14 +35,27 @@ fn source_yahoo_finance<'a>(
     // Defining the record struct for parsing the response content
     #[derive(Debug, serde::Deserialize)]
     struct Record {
-        // #[serde(rename = "Date")]
-        // timestamp:Option<chrono::DateTime<chrono::Utc>>,
+        #[serde(rename = "Date")]
+        #[serde(deserialize_with = "parsers::serde_parsers::parsing_std_dates")]
+        // Note that csv::invalid_option is not used here, since the functionality is already provided by the custom deserializer.
+        timestamp: Option<chrono::DateTime<chrono::Utc>>,
         #[serde(rename = "Open")]
+        #[serde(deserialize_with = "csv::invalid_option")]
         open_price: Option<f32>,
+        #[serde(rename = "Close")]
+        #[serde(deserialize_with = "csv::invalid_option")]
         close_price: Option<f32>,
+        #[serde(rename = "High")]
+        #[serde(deserialize_with = "csv::invalid_option")]
         high_price: Option<f32>,
+        #[serde(rename = "Low")]
+        #[serde(deserialize_with = "csv::invalid_option")]
         low_price: Option<f32>,
+        #[serde(rename = "Adj Close")]
+        #[serde(deserialize_with = "csv::invalid_option")]
         adj_close_price: Option<f32>,
+        #[serde(rename = "Volume")]
+        #[serde(deserialize_with = "csv::invalid_option")]
         volume: Option<f32>,
     }
 
@@ -55,10 +68,22 @@ fn source_yahoo_finance<'a>(
     // Sending the GET request
     let response = requests::blocking_reqwest(&url)?;
 
-    // Parsing the raw data
+    // Parsing the raw data into a bytes array
     let response_bytes = parsers::parse_blocking_response_bytes(response)?;
 
-    //
+    // Parsing the response bytes array into a csv reader
+    let mut csv_reader = csv::ReaderBuilder::new().from_reader(&*response_bytes);
+
+    let records = csv_reader
+        .into_deserialize()
+        .filter_map(|raw_record| match raw_record {
+            Ok(rec) => {
+                let record: Record = rec;
+                Some(record)
+            }
+            Err(e) => None,
+        })
+        .collect::<Vec<Record>>();
 
     todo!()
 }
