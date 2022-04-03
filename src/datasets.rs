@@ -1,11 +1,11 @@
 //! Objective: The main purpose of this module is to provide connectivity to various data sources to pull data from.
-use std::sync::mpsc::Receiver;
+
 
 use super::enums;
 use super::errors;
 use super::parsers;
 use super::requests;
-use csv;
+
 
 struct TickerInfo<'a> {
     ticker_symbol: &'a str,
@@ -72,16 +72,16 @@ fn source_yahoo_finance<'a>(
     let response_bytes = parsers::parse_blocking_response_bytes(response)?;
 
     // Parsing the response bytes array into a csv reader
-    let mut csv_reader = csv::ReaderBuilder::new().from_reader(&*response_bytes);
+    let csv_reader = csv::ReaderBuilder::new().from_reader(&*response_bytes);
 
-    let records = csv_reader
+    let _records = csv_reader
         .into_deserialize()
         .filter_map(|raw_record| match raw_record {
             Ok(rec) => {
                 let record: Record = rec;
                 Some(record)
             }
-            Err(e) => None,
+            Err(_e) => None,
         })
         .collect::<Vec<Record>>();
 
