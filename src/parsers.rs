@@ -1,29 +1,32 @@
 //! Purpose of this module is to provide parsing capabilities
 
 use super::errors;
-use chrono;
-use reqwest;
+
+
 
 pub fn parse_blocking_response_bytes(
     response: reqwest::blocking::Response,
 ) -> Result<Vec<u8>, errors::SourceDataError> {
     // Attempt to parse the input response object into bytes
-    let parsed_output = match response.bytes() {
+    
+
+    match response.bytes() {
         Ok(i) => Ok(i.into_iter().collect::<Vec<u8>>()),
         Err(_) => Err(errors::SourceDataError::ParseError(
             "Unable to parse the response object!".to_string(),
         )),
-    };
-
-    parsed_output
+    }
 }
 
-mod serde_parsers {
+pub mod serde_parsers {
     use chrono::TimeZone;
 
-    pub fn parsing_datetimes<'de, D>(
+
+    /// Used for parsing standard datetimes into chrono::Datetime<chrono::Utc> output.
+    /// Input datetime should be in the following format: %Y-%m-%d
+    pub fn parsing_std_dates<'de, D>(
         deserializer: D,
-    ) -> Result<chrono::DateTime<chrono::Utc>, D::Error>
+    ) -> Result<Option<chrono::DateTime<chrono::Utc>>, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
@@ -42,18 +45,24 @@ mod serde_parsers {
             where
                 E: serde::de::Error,
             {
-                let conversion_result = chrono::Utc
+                
+                chrono::Utc
                     .datetime_from_str(value, DATETIME_FORMAT)
-                    .map_err(|x| {
+                    .map_err(|_x| {
                         serde::de::Error::custom(format!(
                             "Error while parsing the following datetime value: {}",
                             value
                         ))
-                    });
-                conversion_result
+                    })
             }
         }
 
-        deserializer.deserialize_str(DatetimeVisitor)
+        match deserializer.deserialize_str(DatetimeVisitor) {
+            Ok(i) => Ok(Some(i)),
+            Err(e) => {
+                eprintln!("Error occured while parsing datetime: {}", e); // Print the error to stderr. 
+                Ok(None) // Instead of bubbling up an error, return a None instead.
+            }
+        }
     }
 }
