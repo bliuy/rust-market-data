@@ -1,6 +1,6 @@
 //! Defining custom errors for the Market_Analysis crate.
 
-use reqwest;
+
 
 #[derive(Debug)]
 pub enum SourceDataError {
@@ -31,10 +31,10 @@ mod tests {
     #[test]
     fn SourceDataError() {
 
-        let test_func = (|| SourceDataError::ConnectionError("Test Connection Error.".to_string()));
+        let test_func = || SourceDataError::ConnectionError("Test Connection Error.".to_string());
         let returned_error = test_func();
         match returned_error{
-            SourceDataError::ConnectionError(i) => {assert!(i=="Test Connection Error.".to_string())},
+            SourceDataError::ConnectionError(i) => {assert!(i==*"Test Connection Error.")},
             _ => panic!("Assertion failed.")
         }
 
