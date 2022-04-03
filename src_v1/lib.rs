@@ -1,4 +1,4 @@
-use std::{error::Error};
+use std::error::Error;
 
 use serde::{Deserialize, Serialize};
 
@@ -11,6 +11,7 @@ pub enum Currency {
     SGD,
 }
 
+#[derive(Clone, Copy)]
 pub enum DeltaType {
     OpenLow,
     HighOpen,
@@ -18,6 +19,7 @@ pub enum DeltaType {
     PrevCloseLow,
 }
 
+#[derive(Clone, Copy)]
 pub enum MetricType {
     HighPrice,
     LowPrice,
@@ -27,6 +29,13 @@ pub enum MetricType {
     Volume,
     PercentageDelta(DeltaType),
     PriceDelta(DeltaType),
+}
+
+#[derive(Clone, Copy)]
+pub enum AggFunctions {
+    Max,
+    Min,
+    Avg,
 }
 
 pub enum MetricResult<'a> {
@@ -171,7 +180,7 @@ pub fn get_prices(
 
     // Returning an Error if there is no CsvRecords to be read
     if csv_vec.is_empty() {
-        return Err("No data returned for the provided ticker symbol.".into())
+        return Err("No data returned for the provided ticker symbol.".into());
     }
 
     // Constructing the PriceRecord Object
@@ -498,11 +507,15 @@ impl<'a> GroupedPriceRecord {
     ) -> Result<PriceRecordResult<f64>, Box<dyn std::error::Error>> {
         let open_price_vec = match self.get_metric(MetricType::OpenPrice)? {
             VecVecTypes::VecVecf64(i) => i,
-            _ => unreachable!("This should be unreachable, as the Open Price must always be present."),
+            _ => unreachable!(
+                "This should be unreachable, as the Open Price must always be present."
+            ),
         };
         let close_price_vec = match self.get_metric(MetricType::ClosePrice)? {
             VecVecTypes::VecVecf64(i) => i,
-            _ => unreachable!("This should be unreachable, as the Close Price must always be present."),
+            _ => unreachable!(
+                "This should be unreachable, as the Close Price must always be present."
+            ),
         };
         let values = open_price_vec
             .iter()
@@ -580,7 +593,7 @@ mod tests {
         let price_record = get_prices(
             "XLK",
             chrono::Utc.ymd(2022, 1, 1).and_hms(0, 0, 0),
-            chrono::Utc.ymd(2022, 3, 15).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 3, 28).and_hms(0, 0, 0),
         )
         .unwrap();
         let grouped_price_record = price_record
@@ -590,7 +603,9 @@ mod tests {
         let mut price_record_result = grouped_price_record
             .max(MetricType::PercentageDelta(DeltaType::HighPrevClose))
             .unwrap();
-        let percentiles = vec![0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0];
+        let percentiles = vec![
+            0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0,
+        ];
         let percentile_result = sorting::percentile(&percentiles, &mut price_record_result.values);
         println!("{:#?}", percentile_result);
     }
@@ -613,7 +628,7 @@ mod tests {
         let price_record = get_prices(
             "XLK",
             chrono::Utc.ymd(2022, 1, 1).and_hms(0, 0, 0),
-            chrono::Utc.ymd(2022, 3, 12).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 3, 28).and_hms(0, 0, 0),
         )
         .unwrap();
         let grouped_price_record = price_record.groupby_weekly().unwrap();
@@ -625,13 +640,15 @@ mod tests {
     fn testing_percentile_function() {
         let price_record = get_prices(
             "XLK",
-            chrono::Utc.ymd(2021, 1, 1).and_hms(0, 0, 0),
-            chrono::Utc.ymd(2022, 3, 15).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 1, 1).and_hms(0, 0, 0),
+            chrono::Utc.ymd(2022, 3, 28).and_hms(0, 0, 0),
         )
         .unwrap();
         let grouped_price_record = price_record.groupby_weekly().unwrap();
         let mut price_record_result = grouped_price_record.open_close_percentage_delta().unwrap();
-        let percentiles = vec![0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0];
+        let percentiles = vec![
+            0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0,
+        ];
         let percentile_result = sorting::percentile(&percentiles, &mut price_record_result.values);
         println!("{:#?}", percentile_result);
     }

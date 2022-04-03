@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Debug};
+use std::{collections::binary_heap::Iter, error::Error, fmt::Debug, ops::Div};
 
 pub enum InterpolationMethod {
     Linear,
@@ -86,26 +86,22 @@ where
         let mut next_index: usize = n;
 
         // Checking against the first node
-        if first_subnode + 1 <= self.queue.len(){
-            if self.queue[first_subnode] < self.queue[next_index]{
-                next_index = first_subnode;
-            }
+        if first_subnode < self.queue.len() && self.queue[first_subnode] < self.queue[next_index] {
+            next_index = first_subnode;
         }
-        
+
         // Checking against the second node
-        if second_subnode + 1 <= self.queue.len(){
-            if self.queue[second_subnode] < self.queue[next_index]{
-                next_index = second_subnode;
-            }
+        if second_subnode < self.queue.len() && self.queue[second_subnode] < self.queue[next_index]
+        {
+            next_index = second_subnode;
         }
 
         // Swapping the minimum index with the original index
         if next_index != n {
             self.queue.swap(next_index, n);
             self.bubble_down(next_index);
-        } else{
+        } else {
         }
-
     }
 
     pub fn extract_min(&mut self) -> Result<T, Box<dyn Error>> {
@@ -133,6 +129,87 @@ where
         }
 
         Ok(result)
+    }
+
+    pub fn min_heapsort<U>(v: U) -> Vec<T>
+    where
+        U: IntoIterator<Item = T> + Clone,
+    {
+        // Creating an empty heap object
+        let mut heap: Heap<<U as IntoIterator>::Item> = Heap::new();
+
+        // Creating the counter for allocating the memory required for the output array
+        let mut input_length = 0;
+
+        // Adding each element into the heap object
+        for element in v.into_iter() {
+            heap.insert(element);
+            input_length += 1;
+        }
+
+        // Creating the output array object
+        let mut result: Vec<T> = Vec::with_capacity(input_length);
+
+        // Appending the individual sorted elements into the result array
+        loop {
+            match heap.extract_min() {
+                Ok(i) => result.push(i),
+                Err(e) => break,
+            };
+        }
+
+        result
+    }
+}
+
+// Mergesort Implementation
+pub fn mergesort<T>(v: &mut Vec<T>, low: usize, high: usize) -> ()
+where
+    T: PartialOrd + Copy + Debug,
+{
+    fn merge<T>(v: &mut Vec<T>, low: usize, middle: usize, high: usize)
+    where
+        T: PartialOrd + Copy + Debug,
+    {
+        let mut i = low;
+        let mut j = middle + 1;
+        let mut sorted_array: Vec<T> = Vec::new();
+
+        while (i <= middle) && (j <= high) {
+            if (v[i] < v[j]) {
+                sorted_array.push(v[i]);
+                i += 1;
+            } else {
+                sorted_array.push(v[j]);
+                j += 1;
+            }
+        }
+
+        if (i > middle) {
+            while (j <= high) {
+                sorted_array.push(v[j]);
+                j += 1;
+            }
+        }
+
+        if (j > high) {
+            while (i <= middle) {
+                sorted_array.push(v[i]);
+                i += 1;
+            }
+        }
+
+        dbg!(low..high);
+        dbg!(&sorted_array);
+
+        v.splice(low..high + 1, sorted_array);
+    }
+
+    if low < high {
+        let middle = (low + high).div(2);
+        mergesort(v, low, middle);
+        mergesort(v, middle + 1, high);
+        merge(v, low, middle, high);
     }
 }
 
@@ -228,16 +305,24 @@ mod tests {
             86046, 44557, 25526, 25635, 9871, 77256, 30315, 44836, 69870, 88303, 41515, 35741,
             49147, 43033, 25096, 53739, 58789, 13886, 49525, 19517,
         ];
-        let mut heap: Heap<i32> = Heap::new();
-        for num in x {
-            heap.insert(num);
-        }
 
-        let mut x: i32;
-        for _i in 0..heap.queue.len() - 1 {
-            x = heap.extract_min().unwrap();
-            dbg!(x);
-        }
+        let result: Vec<i32> = Heap::min_heapsort(x);
+
+        dbg!(result);
+    }
+
+    #[test]
+    fn mergesort_test() {
+        let mut x = vec![
+            86046, 44557, 25526, 25635, 9871, 77256, 30315, 44836, 69870, 88303, 41515, 35741,
+            49147, 43033, 25096, 53739, 58789, 13886, 49525, 19517,
+        ];
+        let low = 0;
+        let high = x.len() - 1;
+
+        mergesort(&mut x, low, high);
+
+        dbg!(x);
     }
 
     #[test]
