@@ -45,9 +45,11 @@ pub mod serde_parsers {
             where
                 E: serde::de::Error,
             {
+
+                let fmt_value = format!("{} 00:00:00", value);
                 
                 chrono::Utc
-                    .datetime_from_str(value, DATETIME_FORMAT)
+                    .datetime_from_str(&fmt_value, DATETIME_FORMAT)
                     .map_err(|_x| {
                         serde::de::Error::custom(format!(
                             "Error while parsing the following datetime value: {}",
