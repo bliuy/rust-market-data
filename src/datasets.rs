@@ -1,4 +1,7 @@
 //! Objective: The main purpose of this module is to provide connectivity to various data sources to pull data from.
+use std::cmp::Ordering;
+use std::collections::BinaryHeap;
+
 use super::enums;
 use super::errors;
 use super::parsers;
@@ -95,6 +98,32 @@ fn source_yahoo_finance<'a>(
         volume: Option<f32>,
     }
 
+    impl PartialEq for Record {
+        fn eq(&self, other: &Self) -> bool {
+            let x = self.timestamp.expect("Should be unreachable since all invalid timestamps were filtered out during the deserializing process.");
+            let y = other.timestamp.expect("Should be unreachable since all invalid timestamps were filtered out during the deserializing process.");
+            x==y
+        }
+    }
+
+    impl PartialOrd for Record {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            let x = self.timestamp.expect("Should be unreachable since all invalid timestamps were filtered out during the deserializing process.");
+            let y = other.timestamp.expect("Should be unreachable since all invalid timestamps were filtered out during the deserializing process.");
+            Some(x.cmp(&y))
+        }
+    }
+
+    impl Eq for Record {}
+
+    impl Ord for Record {
+        fn cmp(&self, other: &Self) -> Ordering {
+            let x = self.timestamp.expect("Should be unreachable since all invalid timestamps were filtered out during the deserializing process.");
+            let y = other.timestamp.expect("Should be unreachable since all invalid timestamps were filtered out during the deserializing process.");
+            x.cmp(&y)
+        }
+    }
+
     // Constructing the URL
     let url = format!(
         "{}/{}?period1={}&period2={}&interval=1d&events=history&includeAdjustedClose=true",
@@ -110,18 +139,22 @@ fn source_yahoo_finance<'a>(
     // Parsing the response bytes array into a csv reader
     let csv_reader = csv::ReaderBuilder::new().from_reader(&*response_bytes);
 
-    let records = csv_reader
+    let mut records = csv_reader
         .into_deserialize()
         .filter_map(|raw_record| match raw_record {
             Ok(rec) => {
                 let record: Record = rec;
-                Some(record)
+                if let None = record.timestamp {
+                    return None // Return None if invalid timestamp is found.
+                }
+                Some(record) // Only these records will be stored in the records vec
             }
-            Err(_e) => None,
+            Err(_e) => None, // These records will be filtered out
         })
-        .collect::<Vec<Record>>();
+        .collect::<BinaryHeap<Record>>()
+        .into_sorted_vec(); // Sorted by Max heap - Latest Timestamp first
 
-    println!("{:#?}", records);
+    dbg!(records);
 
 
     todo!()
@@ -144,7 +177,7 @@ mod tests {
 
     #[test]
     fn test_source_yahoo_finance() {
-        let foo = TickerInfo::new("AAPL", "2020-01-01 00:00:00", "2020-01-07 00:00:00").unwrap(); // Unwrapped used, panics will cause the test to fail.
+        let foo = TickerInfo::new("AAPL", "2022-01-01 00:00:00", "2022-01-07 00:00:00").unwrap(); // Unwrapped used, panics will cause the test to fail.
         source_yahoo_finance(&foo);
     }
     
