@@ -4,6 +4,7 @@
 pub enum SourceDataError {
     ConnectionError(String),
     ParseError(String),
+    MissingDataError(String),
 }
 
 impl std::error::Error for SourceDataError {}
@@ -19,6 +20,10 @@ impl std::fmt::Display for SourceDataError {
             SourceDataError::ParseError(msg) => std::fmt::write(
                 formatter,
                 format_args!("Error raised during the parsing of source data: {}", msg),
+            ),
+            SourceDataError::MissingDataError(msg) => std::fmt::write(
+                formatter,
+                format_args!("Missing data found! See the error raised: {}", msg),
             ),
         }
     }
