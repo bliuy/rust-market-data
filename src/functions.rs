@@ -12,16 +12,16 @@ mod grouping {
 
     /// Function will aggregate the dataset on a weekly basis.
     pub fn groupby_weekly<'a, T, U>(
-        timestamps: &'a [chrono::DateTime<chrono::Utc>],
-        values: &'a [f32],
+        timestamps: &'a [T],
+        values: &'a [U],
     ) -> Result<
         itertools::GroupBy<
             u32,
-            Zip<Iter<'a, chrono::DateTime<chrono::Utc>>, Iter<'a, f32>>,
-            fn(&(&chrono::DateTime<chrono::Utc>, &f32)) -> u32,
+            Zip<Iter<'a, T>, Iter<'a, U>>,
+            fn(&(&T, &U)) -> u32,
         >,
         AggregationError,
-    > {
+    > where T: chrono::Datelike, U: PartialOrd {
         // Validating that the lengths of the arrays are equal.
         if timestamps.len() != values.len() {
             return Err(AggregationError::InconsistentLengthError(format!(
@@ -32,14 +32,14 @@ mod grouping {
         }
 
         // Defining the grouping function
-        fn _grouping_function(x: &(&chrono::DateTime<chrono::Utc>, &f32)) -> u32 {
+        fn _grouping_function<X,Y>(x: &(&X, &Y)) -> u32 where X: chrono::Datelike, Y: PartialOrd {
             let (timestamp, value) = x;
             timestamp.iso_week().week0()
         } // NOTE: A closure will not work, since the GroupBy struct field will require an actual specific type, while impl Traits are only viable for function signatures.
 
         // Performing casting of the function - Coercing from Function Item (idenfication via distinct type) to Function Pointer (identification via stored address)
         let grouping_function =
-            _grouping_function as fn(&(&chrono::DateTime<chrono::Utc>, &f32)) -> u32;
+            _grouping_function as fn(&(&T, &U)) -> u32;
 
         // The above step helps to avoid the following error:
         // expected struct `itertools::GroupBy<_, std::iter::Zip<std::slice::Iter<'a, _>, std::slice::Iter<'a, _>>, for<'r, 's, 't0> fn(&'r (&'s DateTime<Utc>, &'t0 f32)) -> _>`
