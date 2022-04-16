@@ -6,12 +6,13 @@ use super::enums;
 use super::errors;
 use super::parsers;
 use super::requests;
-use chrono;
+
 use chrono::TimeZone;
 
-mod structs {
-    use super::{traits::Description, *};
+pub mod structs {
+    use super::*;
 
+    #[derive(Debug)]
     pub struct YahooFinancePriceRecord {
         pub(super) ticker: String,
         pub(super) timestamps: Vec<chrono::DateTime<chrono::Utc>>,
@@ -34,14 +35,13 @@ mod structs {
                 high_prices: Vec::with_capacity(num_of_records),
                 low_prices: Vec::with_capacity(num_of_records),
                 volume: Vec::with_capacity(num_of_records),
-                currency: currency,
+                currency,
                 adj_close: Vec::with_capacity(num_of_records),
             }
         }
 
         pub fn get_adj_close_prices<'a>(&'a self) -> &'a [f32] {
-            let x = &self.adj_close;
-            x
+            &self.adj_close
         }
     }
 
@@ -85,8 +85,10 @@ mod structs {
         }
     }
 
+    impl traits::PriceDeltas for YahooFinancePriceRecord {}
+
     #[derive(PartialEq)]
-    pub(super) struct TickerInfo<'a> {
+    pub struct TickerInfo<'a> {
         pub(super) ticker_symbol: &'a str,
         pub(super) start_datetime: chrono::DateTime<chrono::Utc>,
         pub(super) end_datetime: chrono::DateTime<chrono::Utc>,
@@ -94,7 +96,7 @@ mod structs {
     }
 
     impl<'a> TickerInfo<'a> {
-        pub(super) fn new(
+        pub fn new(
             ticker_symbol: &'a str, // Guarantees that the reference to the char array (&str) lives as long as the TickerInfo object.
             start_timestamp: &str,
             end_timestamp: &str,
@@ -107,7 +109,7 @@ mod structs {
                 Ok(i) => i,
                 Err(e) => {
                     return Err(errors::InitializationError::TickerInfoInitializationError(
-                        String::from(format!("{:#?}", e)), // Returning the printed output of the internal error.
+                        format!("{:#?}", e), // Returning the printed output of the internal error.
                     ));
                 }
             };
@@ -115,7 +117,7 @@ mod structs {
                 Ok(i) => i,
                 Err(e) => {
                     return Err(errors::InitializationError::TickerInfoInitializationError(
-                        String::from(format!("{:#?}", e)), // Returning the printed output of the internal error.
+                        format!("{:#?}", e), // Returning the printed output of the internal error.
                     ));
                 }
             };
@@ -161,9 +163,24 @@ pub mod traits {
     pub trait Description {
         fn get_ticker_symbol(&self) -> &str;
     }
+
+    pub trait PriceDeltas: Prices {
+        fn get_high_prevclose_pricedelta(&self) -> Vec<f32> {
+            let high_prices = self.get_high_prices();
+            let close_prices = self.get_close_prices();
+            let num_of_records = high_prices.len();
+            let mut result: Vec<f32> = vec![f32::NAN];
+
+            high_prices[1..]
+                .into_iter()
+                .zip(close_prices[..num_of_records - 1].into_iter())
+                .for_each(|(high, close)| result.push(high - close));
+            result
+        }
+    }
 }
 
-fn source_yahoo_finance<'a>(
+pub fn source_yahoo_finance<'a>(
     ticker_info: &'a structs::TickerInfo,
 ) -> Result<structs::YahooFinancePriceRecord, errors::SourceDataError> {
     const BASE_URL: &str = "https://query1.finance.yahoo.com/v7/finance/download";
@@ -239,14 +256,12 @@ fn source_yahoo_finance<'a>(
     // Parsing the response bytes array into a csv reader
     let csv_reader = csv::ReaderBuilder::new().from_reader(&*response_bytes);
 
-    let mut records = csv_reader
+    let records = csv_reader
         .into_deserialize()
         .filter_map(|raw_record| match raw_record {
             Ok(rec) => {
                 let record: Record = rec;
-                if let None = record.timestamp {
-                    return None; // Return None if invalid timestamp is found.
-                }
+                record.timestamp?;
                 Some(record) // Only these records will be stored in the records vec
             }
             Err(_e) => None, // These records will be filtered out
@@ -327,7 +342,8 @@ fn source_yahoo_finance<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{structs::YahooFinancePriceRecord, *};
+    use crate::datasets::traits::*;
 
     #[test]
     fn ticker_info_struct_new() {
@@ -352,10 +368,37 @@ mod tests {
         let foo = structs::TickerInfo::new(
             "AAPL",
             "2022-01-01 00:00:00",
-            "2022-01-07 00:00:00",
+            "2022-01-05 00:00:00",
             enums::Currency::Usd,
         )
         .unwrap(); // Unwrapped used, panics will cause the test to fail.
-        source_yahoo_finance(&foo);
+        let bar = source_yahoo_finance(&foo).unwrap(); // Result from the function
+
+        // Checking the individual attributes
+        let test_case_timestamps: Vec<chrono::DateTime<chrono::Utc>> = vec![
+            chrono::Date::from_utc(chrono::NaiveDate::from_ymd(2022, 1, 3), chrono::Utc)
+                .and_hms(0, 0, 0),
+            chrono::Date::from_utc(chrono::NaiveDate::from_ymd(2022, 1, 4), chrono::Utc)
+                .and_hms(0, 0, 0),
+        ];
+        assert!(bar.get_timestamps() == &test_case_timestamps);
+
+        let test_case_open: Vec<f32> = vec![177.83, 182.63];
+        assert!(bar.get_open_prices() == &test_case_open);
+
+        let test_case_high: Vec<f32> = vec![182.88, 182.94];
+        assert!(bar.get_high_prices() == &test_case_high);
+
+        let test_case_low: Vec<f32> = vec![177.71, 179.12];
+        assert!(bar.get_low_prices() == &test_case_low);
+
+        let test_case_close: Vec<f32> = vec![182.01, 179.70];
+        assert!(bar.get_close_prices() == &test_case_close);
+
+        let test_case_adjclose: Vec<f32> = vec![181.7784, 179.47134];
+        assert!(bar.get_adj_close_prices() == &test_case_adjclose);
+
+        let test_case_volume: Vec<i32> = vec![104487900, 99310400];
+        assert!(bar.get_volume() == &test_case_volume);
     }
 }
