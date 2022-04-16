@@ -160,14 +160,14 @@ mod tests {
     #[test]
     fn visualize_aggregationfunctions_max() -> () {
         let foo = datasets::structs::TickerInfo::new(
-            "AAPL",
+            "XLK",
             "2022-01-01 00:00:00",
             "2022-04-01 00:00:00",
             enums::Currency::Usd,
         )
         .unwrap();
         let bar = datasets::source_yahoo_finance(&foo).unwrap();
-        let quxx = bar.get_high_prevclose_pricedelta();
+        let quxx = bar.get_high_prevclose_pricedelta_percentage();
         let baz = grouping::groupby_weekly(bar.get_timestamps(), &quxx).unwrap();
         let qux = AggregationFunctions::max(baz);
         dbg!(qux);
