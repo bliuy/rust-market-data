@@ -47,6 +47,23 @@ impl std::fmt::Display for InitializationError {
     }
 }
 
+#[derive(Debug)]
+pub enum AggregationError {
+    InconsistentLengthError(String),
+}
+
+impl std::error::Error for AggregationError {}
+
+impl std::fmt::Display for AggregationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            AggregationError::InconsistentLengthError(err) => {
+                std::fmt::write(formatter, format_args!("Error occured in line {} due to inconsistencies observed between array lengths. See the error raised: {}", line!(), err))
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
