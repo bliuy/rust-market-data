@@ -1,14 +1,13 @@
 //! Objective: Provide functionality for calculating useful metrics from the datasets.
 
-use super::datasets;
 use super::errors::AggregationError;
-use chrono;
+
 use itertools::Itertools;
 use num_traits::{self, Num};
 
 mod grouping {
     use super::*;
-    use chrono::{DateTime, Datelike};
+    use chrono::Datelike;
     use std::{iter::Zip, slice::Iter};
 
     /// Function will aggregate the dataset on a weekly basis.
@@ -25,7 +24,7 @@ mod grouping {
     >
     where
         T: chrono::Datelike,
-        U: Ord + Copy + num_traits::Num,
+        U: PartialOrd + Copy + num_traits::Num,
     {
         // Validating that the lengths of the arrays are equal.
         if timestamps.len() != values.len() {
@@ -42,13 +41,22 @@ mod grouping {
             X: chrono::Datelike,
             Y: PartialOrd,
         {
-            let (timestamp, value) = x;
-            let current_week = timestamp.iso_week().week0();
-            let week: chrono::DateTime<chrono::Utc> = chrono::Utc::today()
-                .and_hms(0, 0, 0)
-                .with_ordinal0(current_week * 7)
-                .unwrap();
+            let (timestamp, _value) = x;
+            let naive_week = chrono::NaiveDate::from_isoywd(
+                timestamp.year(),
+                timestamp.iso_week().week(),
+                chrono::Weekday::Mon,
+            );
+            let week = chrono::Date::from_utc(naive_week, chrono::Utc).and_hms(0, 0, 0);
             week
+
+            // let (timestamp, _value) = x;
+            // let current_week = timestamp.iso_week().week0();
+            // let week: chrono::DateTime<chrono::Utc> = chrono::Utc::today()
+            //     .and_hms(0, 0, 0)
+            //     .with_ordinal0(current_week * 7)
+            //     .unwrap();
+            // week
         } // NOTE: A closure (anonymous type) will not work as it cannot be defined within the , since the GroupBy struct field will require an actual specific type, while impl Traits are only viable for function signatures.
           // Following error will be returned if closure is used:
           // mismatched types
@@ -70,14 +78,16 @@ mod grouping {
     }
 }
 
-mod AggregationFunctions {
+pub mod AggregationFunctions {
+
+    use std::cmp::Ordering;
 
     use super::*;
 
     // Defining custom types
-    type AggregationResult<T: chrono::Datelike, U: Ord> = std::collections::HashMap<T, U>;
+    type AggregationResult<T, U> = std::collections::HashMap<T, U>;
 
-    fn max<'a, T, U>(
+    pub fn max<'a, T, U>(
         groupby: itertools::GroupBy<
             chrono::DateTime<chrono::Utc>,
             std::iter::Zip<std::slice::Iter<'a, T>, std::slice::Iter<'a, U>>,
@@ -86,30 +96,80 @@ mod AggregationFunctions {
     ) -> AggregationResult<chrono::DateTime<chrono::Utc>, U>
     where
         T: chrono::Datelike,
-        U: Ord + Copy + num_traits::Num,
+        U: PartialOrd + Copy + num_traits::Num,
     {
         // Creating new AggregationResult object
-        let mut result: AggregationResult<chrono::DateTime<chrono::Utc>, U> =
-            AggregationResult::new();
+        let _result: AggregationResult<chrono::DateTime<chrono::Utc>, U> = AggregationResult::new();
+        let generic_zero = match <U as Num>::from_str_radix("0", 10) {
+            Ok(i) => i,
+            Err(e) => unreachable!(),
+        }; // Returns an equivalent zero value for the generic type.
 
         // Processing of the individual groups
         let result: AggregationResult<chrono::DateTime<chrono::Utc>, U> = groupby
             .into_iter()
             .map(|(k, v)| {
-                let max_value = match v.map(|(x, &y)| y).max() {
+                let max_value = match v.map(|(_x, &y)| y).max_by(|a, b| match a.partial_cmp(&b) {
                     Some(i) => i,
                     None => {
-                        let zero = match <U as Num>::from_str_radix("0", 10) {
-                            Ok(j) => j,
-                            Err(e) => unreachable!(),
-                        };
-                        zero
+                        if let None = a.partial_cmp(&generic_zero) {
+                            Ordering::Less // Returns "b" as "a" is the NaN value
+                        } else {
+                            Ordering::Greater // Returns "a" as "b" is the NaN value
+                        }
                     }
+                }) {
+                    Some(i) => i,
+                    None => generic_zero,
                 };
                 (k, max_value)
             })
             .collect();
 
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::datasets;
+    use crate::datasets::traits::*;
+    use crate::enums;
+
+    #[test]
+    fn visualize_groupby_weekly() -> () {
+        let foo = datasets::structs::TickerInfo::new(
+            "AAPL",
+            "2022-01-01 00:00:00",
+            "2022-04-01 00:00:00",
+            enums::Currency::Usd,
+        )
+        .unwrap();
+        let bar = datasets::source_yahoo_finance(&foo).unwrap();
+        let baz = grouping::groupby_weekly(bar.get_timestamps(), bar.get_high_prices()).unwrap();
+        for qux in baz.into_iter() {
+            dbg!(&qux.0);
+            for quux in qux.1.into_iter() {
+                dbg!(quux);
+            }
+        }
+    }
+
+    #[test]
+    fn visualize_aggregationfunctions_max() -> () {
+        let foo = datasets::structs::TickerInfo::new(
+            "AAPL",
+            "2022-01-01 00:00:00",
+            "2022-04-01 00:00:00",
+            enums::Currency::Usd,
+        )
+        .unwrap();
+        let bar = datasets::source_yahoo_finance(&foo).unwrap();
+        let quxx = bar.get_high_prevclose_pricedelta();
+        let baz = grouping::groupby_weekly(bar.get_timestamps(), &quxx).unwrap();
+        let qux = AggregationFunctions::max(baz);
+        dbg!(qux);
     }
 }
