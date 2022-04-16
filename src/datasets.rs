@@ -87,6 +87,8 @@ pub mod structs {
 
     impl traits::PriceDeltas for YahooFinancePriceRecord {}
 
+    impl traits::PriceDeltaPercentages for YahooFinancePriceRecord {}
+
     #[derive(PartialEq)]
     pub struct TickerInfo<'a> {
         pub(super) ticker_symbol: &'a str,
@@ -175,6 +177,34 @@ pub mod traits {
                 .into_iter()
                 .zip(close_prices[..num_of_records - 1].into_iter())
                 .for_each(|(high, close)| result.push(high - close));
+            result
+        }
+
+        fn get_prevclose_low_pricedelta(&self) -> Vec<f32> {
+            let low_prices = self.get_low_prices();
+            let close_prices = self.get_close_prices();
+            let num_of_records = low_prices.len();
+            let mut result: Vec<f32> = vec![f32::NAN];
+
+            low_prices[1..]
+                .into_iter()
+                .zip(close_prices[..num_of_records - 1].into_iter())
+                .for_each(|(low, close)| result.push(close - low));
+            result
+        }
+    }
+
+    pub trait PriceDeltaPercentages: PriceDeltas {
+        fn get_high_prevclose_pricedelta_percentage(&self) -> Vec<f32> {
+            let high_prevclose_pricedelta = self.get_high_prevclose_pricedelta();
+            let close_prices = self.get_close_prices();
+            let num_of_records = high_prevclose_pricedelta.len();
+            let mut result: Vec<f32> = Vec::new();
+
+            high_prevclose_pricedelta
+                .into_iter()
+                .zip(close_prices[..num_of_records].into_iter())
+                .for_each(|(high_prevclose, close)| result.push((high_prevclose / close) * 100.0));
             result
         }
     }
