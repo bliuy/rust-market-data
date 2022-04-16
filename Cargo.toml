@@ -12,3 +12,4 @@ chrono = "0.4"
 serde = { version = "1.0.136", features = ["derive"] }
 num-traits = "0.2.14"
 conv = "0.3.3"
+itertools = "0.10.2"
