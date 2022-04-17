@@ -207,6 +207,19 @@ pub mod traits {
                 .for_each(|(high_prevclose, close)| result.push((high_prevclose / close) * 100.0));
             result
         }
+
+        fn get_prevclose_low_pricedelta_percentage(&self) -> Vec<f32> {
+            let prevclose_low_pricedelta = self.get_prevclose_low_pricedelta();
+            let close_prices = self.get_close_prices();
+            let num_of_records = prevclose_low_pricedelta.len();
+            let mut result: Vec<f32> = Vec::new();
+
+            prevclose_low_pricedelta
+                .into_iter()
+                .zip(close_prices[..num_of_records].iter())
+                .for_each(|(high_prevclose, close)| result.push((high_prevclose / close) * 100.0));
+            result
+        }
     }
 }
 
@@ -372,7 +385,7 @@ pub fn source_yahoo_finance<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::{*};
+    use super::*;
     use crate::datasets::traits::*;
 
     #[test]
