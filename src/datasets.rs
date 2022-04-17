@@ -174,8 +174,8 @@ pub mod traits {
             let mut result: Vec<f32> = vec![f32::NAN];
 
             high_prices[1..]
-                .into_iter()
-                .zip(close_prices[..num_of_records - 1].into_iter())
+                .iter()
+                .zip(close_prices[..num_of_records - 1].iter())
                 .for_each(|(high, close)| result.push(high - close));
             result
         }
@@ -187,8 +187,8 @@ pub mod traits {
             let mut result: Vec<f32> = vec![f32::NAN];
 
             low_prices[1..]
-                .into_iter()
-                .zip(close_prices[..num_of_records - 1].into_iter())
+                .iter()
+                .zip(close_prices[..num_of_records - 1].iter())
                 .for_each(|(low, close)| result.push(close - low));
             result
         }
@@ -203,7 +203,7 @@ pub mod traits {
 
             high_prevclose_pricedelta
                 .into_iter()
-                .zip(close_prices[..num_of_records].into_iter())
+                .zip(close_prices[..num_of_records].iter())
                 .for_each(|(high_prevclose, close)| result.push((high_prevclose / close) * 100.0));
             result
         }
@@ -372,7 +372,7 @@ pub fn source_yahoo_finance<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::{structs::YahooFinancePriceRecord, *};
+    use super::{*};
     use crate::datasets::traits::*;
 
     #[test]
@@ -411,24 +411,24 @@ mod tests {
             chrono::Date::from_utc(chrono::NaiveDate::from_ymd(2022, 1, 4), chrono::Utc)
                 .and_hms(0, 0, 0),
         ];
-        assert!(bar.get_timestamps() == &test_case_timestamps);
+        assert!(bar.get_timestamps() == test_case_timestamps);
 
         let test_case_open: Vec<f32> = vec![177.83, 182.63];
-        assert!(bar.get_open_prices() == &test_case_open);
+        assert!(bar.get_open_prices() == test_case_open);
 
         let test_case_high: Vec<f32> = vec![182.88, 182.94];
-        assert!(bar.get_high_prices() == &test_case_high);
+        assert!(bar.get_high_prices() == test_case_high);
 
         let test_case_low: Vec<f32> = vec![177.71, 179.12];
-        assert!(bar.get_low_prices() == &test_case_low);
+        assert!(bar.get_low_prices() == test_case_low);
 
         let test_case_close: Vec<f32> = vec![182.01, 179.70];
-        assert!(bar.get_close_prices() == &test_case_close);
+        assert!(bar.get_close_prices() == test_case_close);
 
         let test_case_adjclose: Vec<f32> = vec![181.7784, 179.47134];
-        assert!(bar.get_adj_close_prices() == &test_case_adjclose);
+        assert!(bar.get_adj_close_prices() == test_case_adjclose);
 
         let test_case_volume: Vec<i32> = vec![104487900, 99310400];
-        assert!(bar.get_volume() == &test_case_volume);
+        assert!(bar.get_volume() == test_case_volume);
     }
 }

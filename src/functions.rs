@@ -47,8 +47,8 @@ mod grouping {
                 timestamp.iso_week().week(),
                 chrono::Weekday::Mon,
             );
-            let week = chrono::Date::from_utc(naive_week, chrono::Utc).and_hms(0, 0, 0);
-            week
+            
+            chrono::Date::from_utc(naive_week, chrono::Utc).and_hms(0, 0, 0)
 
             // let (timestamp, _value) = x;
             // let current_week = timestamp.iso_week().week0();
@@ -102,17 +102,17 @@ pub mod AggregationFunctions {
         let _result: AggregationResult<chrono::DateTime<chrono::Utc>, U> = AggregationResult::new();
         let generic_zero = match <U as Num>::from_str_radix("0", 10) {
             Ok(i) => i,
-            Err(e) => unreachable!(),
+            Err(_e) => unreachable!(),
         }; // Returns an equivalent zero value for the generic type.
 
         // Processing of the individual groups
         let result: AggregationResult<chrono::DateTime<chrono::Utc>, U> = groupby
             .into_iter()
             .map(|(k, v)| {
-                let max_value = match v.map(|(_x, &y)| y).max_by(|a, b| match a.partial_cmp(&b) {
+                let max_value = match v.map(|(_x, &y)| y).max_by(|a, b| match a.partial_cmp(b) {
                     Some(i) => i,
                     None => {
-                        if let None = a.partial_cmp(&generic_zero) {
+                        if a.partial_cmp(&generic_zero).is_none() {
                             Ordering::Less // Returns "b" as "a" is the NaN value
                         } else {
                             Ordering::Greater // Returns "a" as "b" is the NaN value
@@ -139,7 +139,7 @@ mod tests {
     use crate::enums;
 
     #[test]
-    fn visualize_groupby_weekly() -> () {
+    fn visualize_groupby_weekly() {
         let foo = datasets::structs::TickerInfo::new(
             "AAPL",
             "2022-01-01 00:00:00",
@@ -151,14 +151,14 @@ mod tests {
         let baz = grouping::groupby_weekly(bar.get_timestamps(), bar.get_high_prices()).unwrap();
         for qux in baz.into_iter() {
             dbg!(&qux.0);
-            for quux in qux.1.into_iter() {
+            for quux in qux.1 {
                 dbg!(quux);
             }
         }
     }
 
     #[test]
-    fn visualize_aggregationfunctions_max() -> () {
+    fn visualize_aggregationfunctions_max() {
         let foo = datasets::structs::TickerInfo::new(
             "XLK",
             "2022-01-01 00:00:00",
