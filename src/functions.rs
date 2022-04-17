@@ -5,21 +5,22 @@ use super::errors::AggregationError;
 use itertools::Itertools;
 use num_traits::{self, Num};
 
-mod grouping {
+mod Grouping {
     use super::*;
     use chrono::Datelike;
     use std::{iter::Zip, slice::Iter};
+
+    pub type GroupedBy<'a, T, U> = itertools::GroupBy<
+        chrono::DateTime<chrono::Utc>,
+        Zip<Iter<'a, T>, Iter<'a, U>>,
+        fn(&(&T, &U)) -> chrono::DateTime<chrono::Utc>>;
 
     /// Function will aggregate the dataset on a weekly basis.
     pub fn groupby_weekly<'a, T, U>(
         timestamps: &'a [T],
         values: &'a [U],
     ) -> Result<
-        itertools::GroupBy<
-            chrono::DateTime<chrono::Utc>,
-            Zip<Iter<'a, T>, Iter<'a, U>>,
-            fn(&(&T, &U)) -> chrono::DateTime<chrono::Utc>,
-        >,
+        GroupedBy<'a, T, U>,
         AggregationError,
     >
     where
@@ -49,14 +50,6 @@ mod grouping {
             );
             
             chrono::Date::from_utc(naive_week, chrono::Utc).and_hms(0, 0, 0)
-
-            // let (timestamp, _value) = x;
-            // let current_week = timestamp.iso_week().week0();
-            // let week: chrono::DateTime<chrono::Utc> = chrono::Utc::today()
-            //     .and_hms(0, 0, 0)
-            //     .with_ordinal0(current_week * 7)
-            //     .unwrap();
-            // week
         } // NOTE: A closure (anonymous type) will not work as it cannot be defined within the , since the GroupBy struct field will require an actual specific type, while impl Traits are only viable for function signatures.
           // Following error will be returned if closure is used:
           // mismatched types
@@ -88,11 +81,7 @@ pub mod AggregationFunctions {
     type AggregationResult<T, U> = std::collections::HashMap<T, U>;
 
     pub fn max<'a, T, U>(
-        groupby: itertools::GroupBy<
-            chrono::DateTime<chrono::Utc>,
-            std::iter::Zip<std::slice::Iter<'a, T>, std::slice::Iter<'a, U>>,
-            fn(&(&T, &U)) -> chrono::DateTime<chrono::Utc>,
-        >,
+        groupby: Grouping::GroupedBy<'a, T, U>,
     ) -> AggregationResult<chrono::DateTime<chrono::Utc>, U>
     where
         T: chrono::Datelike,
@@ -148,7 +137,7 @@ mod tests {
         )
         .unwrap();
         let bar = datasets::source_yahoo_finance(&foo).unwrap();
-        let baz = grouping::groupby_weekly(bar.get_timestamps(), bar.get_high_prices()).unwrap();
+        let baz = Grouping::groupby_weekly(bar.get_timestamps(), bar.get_high_prices()).unwrap();
         for qux in baz.into_iter() {
             dbg!(&qux.0);
             for quux in qux.1 {
@@ -168,7 +157,7 @@ mod tests {
         .unwrap();
         let bar = datasets::source_yahoo_finance(&foo).unwrap();
         let quxx = bar.get_high_prevclose_pricedelta_percentage();
-        let baz = grouping::groupby_weekly(bar.get_timestamps(), &quxx).unwrap();
+        let baz = Grouping::groupby_weekly(bar.get_timestamps(), &quxx).unwrap();
         let qux = AggregationFunctions::max(baz);
         dbg!(qux);
     }
