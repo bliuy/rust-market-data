@@ -13,16 +13,14 @@ mod Grouping {
     pub type GroupedBy<'a, T, U> = itertools::GroupBy<
         chrono::DateTime<chrono::Utc>,
         Zip<Iter<'a, T>, Iter<'a, U>>,
-        fn(&(&T, &U)) -> chrono::DateTime<chrono::Utc>>;
+        fn(&(&T, &U)) -> chrono::DateTime<chrono::Utc>,
+    >;
 
     /// Function will aggregate the dataset on a weekly basis.
     pub fn groupby_weekly<'a, T, U>(
         timestamps: &'a [T],
         values: &'a [U],
-    ) -> Result<
-        GroupedBy<'a, T, U>,
-        AggregationError,
-    >
+    ) -> Result<GroupedBy<'a, T, U>, AggregationError>
     where
         T: chrono::Datelike,
         U: PartialOrd + Copy + num_traits::Num,
@@ -48,7 +46,7 @@ mod Grouping {
                 timestamp.iso_week().week(),
                 chrono::Weekday::Mon,
             );
-            
+
             chrono::Date::from_utc(naive_week, chrono::Utc).and_hms(0, 0, 0)
         } // NOTE: A closure (anonymous type) will not work as it cannot be defined within the , since the GroupBy struct field will require an actual specific type, while impl Traits are only viable for function signatures.
           // Following error will be returned if closure is used:
@@ -117,6 +115,8 @@ pub mod AggregationFunctions {
 
         result
     }
+
+
 }
 
 #[cfg(test)]
