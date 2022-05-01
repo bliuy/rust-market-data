@@ -50,6 +50,7 @@ impl std::fmt::Display for InitializationError {
 #[derive(Debug)]
 pub enum AggregationError {
     InconsistentLengthError(String),
+    ComparisonError(String),
 }
 
 impl std::error::Error for AggregationError {}
@@ -60,6 +61,42 @@ impl std::fmt::Display for AggregationError {
             AggregationError::InconsistentLengthError(err) => {
                 std::fmt::write(formatter, format_args!("Error occured in line {} due to inconsistencies observed between array lengths. See the error raised: {}", line!(), err))
             }
+            AggregationError::ComparisonError(err) => {
+                std::fmt::write(formatter, format_args!("Error occured in line {} due to failure in comparison of the values. See the error raised: {}", line!(), err))
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum InputError {
+    ExcessiveArgsError(String),
+    InsufficientArgsError(String),
+    InvalidAggregationType(String),
+    InvalidPriceType(String),
+    InvalidAggregationPeriod(String),
+}
+
+impl std::error::Error for InputError {}
+
+impl std::fmt::Display for InputError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            InputError::ExcessiveArgsError(err) => {
+                std::fmt::write(formatter, format_args!("Error occured in line {} due to too many arguments being present. See the error raised: {}", line!(), err))
+            },
+            InputError::InsufficientArgsError(err) => {
+                std::fmt::write(formatter, format_args!("Error occured in line {} due to to insufficient args passed. See the error raised: {}", line!(), err))
+            },
+            InputError::InvalidAggregationType(err) => {
+                std::fmt::write(formatter, format_args!("Error occured in line {} due to to an invalid option passed as the aggregation type parameter. See the error raised: {}", line!(), err))
+            },
+            InputError::InvalidPriceType(err) => {
+                std::fmt::write(formatter, format_args!("Error occured in line {} due to to an invalid option passed as the price type parameter. See the error raised: {}", line!(), err))
+            },
+            InputError::InvalidAggregationPeriod(err) => {
+                std::fmt::write(formatter, format_args!("Error occured in line {} due to to an invalid option passed as the aggregation period parameter. See the error raised: {}", line!(), err))
+            },
         }
     }
 }
