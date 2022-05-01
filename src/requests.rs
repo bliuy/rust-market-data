@@ -1,8 +1,6 @@
 //! This module contains all the functions required to perform a HTTP request
 use super::errors;
 
-
-
 pub fn blocking_reqwest(url: &str) -> Result<reqwest::blocking::Response, errors::SourceDataError> {
     let _response = reqwest::blocking::get(url);
     let response = match _response {

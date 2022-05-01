@@ -40,7 +40,7 @@ pub mod structs {
             }
         }
 
-        pub fn get_adj_close_prices<'a>(&'a self) -> &'a [f32] {
+        pub fn get_adj_close_prices(&self) -> &[f32] {
             &self.adj_close
         }
     }
@@ -145,8 +145,6 @@ pub mod traits {
 
     /// The Prices trait provides a set of functions for retrieval of pricing data in the form of arrays.
     pub trait Prices {
-        // fn get_timestamps(&self) -> &[chrono::DateTime<chrono::Utc>];
-
         fn get_high_prices(&self) -> &[f32];
 
         fn get_low_prices(&self) -> &[f32];

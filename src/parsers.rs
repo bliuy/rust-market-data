@@ -2,13 +2,10 @@
 
 use super::errors;
 
-
-
 pub fn parse_blocking_response_bytes(
     response: reqwest::blocking::Response,
 ) -> Result<Vec<u8>, errors::SourceDataError> {
     // Attempt to parse the input response object into bytes
-    
 
     match response.bytes() {
         Ok(i) => Ok(i.into_iter().collect::<Vec<u8>>()),
@@ -20,7 +17,6 @@ pub fn parse_blocking_response_bytes(
 
 pub mod serde_parsers {
     use chrono::TimeZone;
-
 
     /// Used for parsing standard datetimes into chrono::Datetime<chrono::Utc> output.
     /// Input datetime should be in the following format: %Y-%m-%d
@@ -45,9 +41,8 @@ pub mod serde_parsers {
             where
                 E: serde::de::Error,
             {
-
                 let fmt_value = format!("{} 00:00:00", value);
-                
+
                 chrono::Utc
                     .datetime_from_str(&fmt_value, DATETIME_FORMAT)
                     .map_err(|_x| {
@@ -62,7 +57,7 @@ pub mod serde_parsers {
         match deserializer.deserialize_str(DatetimeVisitor) {
             Ok(i) => Ok(Some(i)),
             Err(e) => {
-                eprintln!("Error occured while parsing datetime: {}", e); // Print the error to stderr. 
+                eprintln!("Error occured while parsing datetime: {}", e); // Print the error to stderr.
                 Ok(None) // Instead of bubbling up an error, return a None instead.
             }
         }
