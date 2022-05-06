@@ -19,6 +19,7 @@ pub mod enums {
         High,
         Low,
         OpenClose,
+        DeltaType(Box::<PriceType>, Box::<PriceType>)
     }
 
     #[derive(Clone, Copy)]
@@ -61,11 +62,14 @@ pub mod structs {
     }
 }
 
-/// Expected input format: [ticker symbol] ---[aggregation type]--- [price type] [aggregation period] [start date] [end date]
+/// Expected input format: [ticker symbol] [price type] [aggregation period] [start date] [end date]
 /// E.g. AAPL high_price weekly 2022-01-01 2022-02-01 --> Performs a weekly aggregation of the high prices in the period between 2022-01-01 and 2022-02-01.
 pub fn get_input() -> Result<InputArgs, errors::InputError> {
     // Getting the user input
-    let mut input_args = std::env::args().collect::<Vec<String>>();
+    let mut input_args = stdin()?
+        .split_whitespace()
+        .map(|x| x.to_owned())
+        .collect::<Vec<String>>();
 
     // Ensuring that the input string is of the correct length
     if input_args.len() > 5 {
