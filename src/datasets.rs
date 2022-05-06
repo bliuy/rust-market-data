@@ -106,8 +106,13 @@ pub mod structs {
         ) -> Result<Self, errors::InitializationError> {
             const DATE_FORMAT: &str = "%Y-%m-%d  %H:%M:%S";
 
+            let start_datetime_input = format!("{} 00:00:00", start_timestamp);
+            let end_datetime_input = format!("{} 00:00:00", end_timestamp);
+
+            
+
             // Processing the start and end dates into chrono datetime objects
-            let start_datetime = match chrono::Utc.datetime_from_str(start_timestamp, DATE_FORMAT) {
+            let start_datetime = match chrono::Utc.datetime_from_str(&start_datetime_input, DATE_FORMAT) {
                 Ok(i) => i,
                 Err(e) => {
                     return Err(errors::InitializationError::TickerInfoInitializationError(
@@ -115,7 +120,7 @@ pub mod structs {
                     ));
                 }
             };
-            let end_datetime = match chrono::Utc.datetime_from_str(end_timestamp, DATE_FORMAT) {
+            let end_datetime = match chrono::Utc.datetime_from_str(&end_datetime_input, DATE_FORMAT) {
                 Ok(i) => i,
                 Err(e) => {
                     return Err(errors::InitializationError::TickerInfoInitializationError(
