@@ -75,6 +75,7 @@ pub enum InputError {
     InvalidAggregationType(String),
     InvalidPriceType(String),
     InvalidAggregationPeriod(String),
+    IOError(String),
 }
 
 impl std::error::Error for InputError {}
@@ -97,9 +98,19 @@ impl std::fmt::Display for InputError {
             InputError::InvalidAggregationPeriod(err) => {
                 std::fmt::write(formatter, format_args!("Error occured in line {} due to to an invalid option passed as the aggregation period parameter. See the error raised: {}", line!(), err))
             },
+            InputError::IOError(err) => {
+                std::fmt::write(formatter, format_args!("Error occured in line {} due to to an I/O error. See the error raised: {}", line!(), err))
+            },
         }
     }
 }
+
+impl From<std::io::Error> for InputError {
+    fn from(e: std::io::Error) -> Self {
+        let error_msg = format!("{}", e);
+        InputError::IOError(error_msg)
+    }
+} // Handling the conversion from the io library error into the custom error defined in this crate.
 
 #[cfg(test)]
 mod tests {
