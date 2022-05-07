@@ -85,9 +85,9 @@ pub mod structs {
         }
     }
 
-    impl traits::PriceDeltas for YahooFinancePriceRecord {}
+    // impl traits::PriceDeltas for YahooFinancePriceRecord {}
 
-    impl traits::PriceDeltaPercentages for YahooFinancePriceRecord {}
+    // impl traits::PriceDeltaPercentages for YahooFinancePriceRecord {}
 
     #[derive(PartialEq)]
     pub struct TickerInfo<'a> {
@@ -109,18 +109,18 @@ pub mod structs {
             let start_datetime_input = format!("{} 00:00:00", start_timestamp);
             let end_datetime_input = format!("{} 00:00:00", end_timestamp);
 
-            
-
             // Processing the start and end dates into chrono datetime objects
-            let start_datetime = match chrono::Utc.datetime_from_str(&start_datetime_input, DATE_FORMAT) {
-                Ok(i) => i,
-                Err(e) => {
-                    return Err(errors::InitializationError::TickerInfoInitializationError(
-                        format!("{:#?}", e), // Returning the printed output of the internal error.
-                    ));
-                }
-            };
-            let end_datetime = match chrono::Utc.datetime_from_str(&end_datetime_input, DATE_FORMAT) {
+            let start_datetime =
+                match chrono::Utc.datetime_from_str(&start_datetime_input, DATE_FORMAT) {
+                    Ok(i) => i,
+                    Err(e) => {
+                        return Err(errors::InitializationError::TickerInfoInitializationError(
+                            format!("{:#?}", e), // Returning the printed output of the internal error.
+                        ));
+                    }
+                };
+            let end_datetime = match chrono::Utc.datetime_from_str(&end_datetime_input, DATE_FORMAT)
+            {
                 Ok(i) => i,
                 Err(e) => {
                     return Err(errors::InitializationError::TickerInfoInitializationError(
@@ -169,61 +169,61 @@ pub mod traits {
         fn get_ticker_symbol(&self) -> &str;
     }
 
-    pub trait PriceDeltas: Prices {
-        fn get_high_prevclose_pricedelta(&self) -> Vec<f32> {
-            let high_prices = self.get_high_prices();
-            let close_prices = self.get_close_prices();
-            let num_of_records = high_prices.len();
-            let mut result: Vec<f32> = vec![f32::NAN];
+    // pub trait PriceDeltas: Prices {
+    //     fn get_high_prevclose_pricedelta(&self) -> Vec<f32> {
+    //         let high_prices = self.get_high_prices();
+    //         let close_prices = self.get_close_prices();
+    //         let num_of_records = high_prices.len();
+    //         let mut result: Vec<f32> = vec![f32::NAN];
 
-            high_prices[1..]
-                .iter()
-                .zip(close_prices[..num_of_records - 1].iter())
-                .for_each(|(high, close)| result.push(high - close));
-            result
-        }
+    //         high_prices[1..]
+    //             .iter()
+    //             .zip(close_prices[..num_of_records - 1].iter())
+    //             .for_each(|(high, close)| result.push(high - close));
+    //         result
+    //     }
 
-        fn get_prevclose_low_pricedelta(&self) -> Vec<f32> {
-            let low_prices = self.get_low_prices();
-            let close_prices = self.get_close_prices();
-            let num_of_records = low_prices.len();
-            let mut result: Vec<f32> = vec![f32::NAN];
+    //     fn get_prevclose_low_pricedelta(&self) -> Vec<f32> {
+    //         let low_prices = self.get_low_prices();
+    //         let close_prices = self.get_close_prices();
+    //         let num_of_records = low_prices.len();
+    //         let mut result: Vec<f32> = vec![f32::NAN];
 
-            low_prices[1..]
-                .iter()
-                .zip(close_prices[..num_of_records - 1].iter())
-                .for_each(|(low, close)| result.push(close - low));
-            result
-        }
-    }
+    //         low_prices[1..]
+    //             .iter()
+    //             .zip(close_prices[..num_of_records - 1].iter())
+    //             .for_each(|(low, close)| result.push(close - low));
+    //         result
+    //     }
+    // }
 
-    pub trait PriceDeltaPercentages: PriceDeltas {
-        fn get_high_prevclose_pricedelta_percentage(&self) -> Vec<f32> {
-            let high_prevclose_pricedelta = self.get_high_prevclose_pricedelta();
-            let close_prices = self.get_close_prices();
-            let num_of_records = high_prevclose_pricedelta.len();
-            let mut result: Vec<f32> = Vec::new();
+    // pub trait PriceDeltaPercentages: PriceDeltas {
+    //     fn get_high_prevclose_pricedelta_percentage(&self) -> Vec<f32> {
+    //         let high_prevclose_pricedelta = self.get_high_prevclose_pricedelta();
+    //         let close_prices = self.get_close_prices();
+    //         let num_of_records = high_prevclose_pricedelta.len();
+    //         let mut result: Vec<f32> = Vec::new();
 
-            high_prevclose_pricedelta
-                .into_iter()
-                .zip(close_prices[..num_of_records].iter())
-                .for_each(|(high_prevclose, close)| result.push((high_prevclose / close) * 100.0));
-            result
-        }
+    //         high_prevclose_pricedelta
+    //             .into_iter()
+    //             .zip(close_prices[..num_of_records].iter())
+    //             .for_each(|(high_prevclose, close)| result.push((high_prevclose / close) * 100.0));
+    //         result
+    //     }
 
-        fn get_prevclose_low_pricedelta_percentage(&self) -> Vec<f32> {
-            let prevclose_low_pricedelta = self.get_prevclose_low_pricedelta();
-            let close_prices = self.get_close_prices();
-            let num_of_records = prevclose_low_pricedelta.len();
-            let mut result: Vec<f32> = Vec::new();
+    //     fn get_prevclose_low_pricedelta_percentage(&self) -> Vec<f32> {
+    //         let prevclose_low_pricedelta = self.get_prevclose_low_pricedelta();
+    //         let close_prices = self.get_close_prices();
+    //         let num_of_records = prevclose_low_pricedelta.len();
+    //         let mut result: Vec<f32> = Vec::new();
 
-            prevclose_low_pricedelta
-                .into_iter()
-                .zip(close_prices[..num_of_records].iter())
-                .for_each(|(high_prevclose, close)| result.push((high_prevclose / close) * 100.0));
-            result
-        }
-    }
+    //         prevclose_low_pricedelta
+    //             .into_iter()
+    //             .zip(close_prices[..num_of_records].iter())
+    //             .for_each(|(high_prevclose, close)| result.push((high_prevclose / close) * 100.0));
+    //         result
+    //     }
+    // }
 }
 
 pub fn source_yahoo_finance<'a>(
