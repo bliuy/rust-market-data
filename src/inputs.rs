@@ -3,7 +3,7 @@ use std::io::Write;
 
 use crate::errors::{self, InputError};
 
-use self::structs::InputArgs;
+use self::{enums::PriceType, structs::InputArgs};
 
 pub mod enums {
 
@@ -12,14 +12,18 @@ pub mod enums {
         Max,
     }
 
-    #[derive(Clone, Copy)]
-    pub enum PriceType {
+    #[derive(Clone, Copy, Debug)]
+    pub enum BasePriceType {
         Open,
         Close,
         High,
         Low,
-        OpenClose,
-        DeltaType(Box::<PriceType>, Box::<PriceType>)
+    }
+
+    #[derive(Clone, Copy)]
+    pub enum PriceType {
+        SinglePrice(BasePriceType),
+        DualPrice(BasePriceType, BasePriceType),
     }
 
     #[derive(Clone, Copy)]
@@ -66,7 +70,13 @@ pub mod structs {
 /// E.g. AAPL high_price weekly 2022-01-01 2022-02-01 --> Performs a weekly aggregation of the high prices in the period between 2022-01-01 and 2022-02-01.
 pub fn get_input() -> Result<InputArgs, errors::InputError> {
     // Getting the user input
-    let mut input_args = stdin()?
+    let user_prompt = "Please provide the user input in the following format: <ticker symbol> <price type> <aggregation period> <start date> <end date> \n
+    * <price type> - Accepted values are: 'high', 'low', 'open', 'close'. For compound calculations (such as price deltas), provide the two values in the following syntax: <price_type 1>|<price_type 2>. \n
+    * <aggregation period> - Accepted values are: 'weekly'.\n
+    * <start date> - Provided in the following format: YYYY-MM-DD.\n
+    * <end date> - Provided in the following format: YYYY-MM-DD.
+    ";
+    let mut input_args = stdin(user_prompt)?
         .split_whitespace()
         .map(|x| x.to_owned())
         .collect::<Vec<String>>();
@@ -84,19 +94,45 @@ pub fn get_input() -> Result<InputArgs, errors::InputError> {
         )));
     }
 
+    // // Matching on the PriceType
+    // let price_type = match input_args.get(1).unwrap() as &str {
+    //     "open_price" => enums::PriceType::Open,
+    //     "close_price" => enums::PriceType::Close,
+    //     "high_price" => enums::PriceType::High,
+    //     "low_price" => enums::PriceType::Low,
+    //     "open_close_price" => enums::PriceType::OpenClose,
+    //     _ => {
+    //         return Err(errors::InputError::InvalidPriceType(
+    //             "Value passed for the price type is invalid.".to_string(),
+    //         ))
+    //     }
+    // };
+
     // Matching on the PriceType
-    let price_type = match input_args.get(1).unwrap() as &str {
-        "open_price" => enums::PriceType::Open,
-        "close_price" => enums::PriceType::Close,
-        "high_price" => enums::PriceType::High,
-        "low_price" => enums::PriceType::Low,
-        "open_close_price" => enums::PriceType::OpenClose,
-        _ => {
-            return Err(errors::InputError::InvalidPriceType(
-                "Value passed for the price type is invalid.".to_string(),
-            ))
-        }
+    let _get_base_price_type = |x| match x {
+        "open" => Ok(enums::BasePriceType::Open),
+        "close" => Ok(enums::BasePriceType::Close),
+        "high" => Ok(enums::BasePriceType::High),
+        "low" => Ok(enums::BasePriceType::Low),
+        _ => Err(errors::InputError::InvalidPriceType(
+            "Value passed for the price type is invalid.".to_string(),
+        )),
     };
+
+    let mut price_type: PriceType;
+    let raw_price_string = input_args.get(1).unwrap();
+    if raw_price_string.contains("|") {
+        let splitted_raw_price_string = raw_price_string.split("|").collect::<Vec<_>>();
+        if splitted_raw_price_string.len() != 2 {
+            return Err(InputError::InsufficientArgsError(format!("Expected input in the following format: <price type 1>|<price_type_2>, got {} instead", raw_price_string)));
+        }
+        let price_type_first = _get_base_price_type(splitted_raw_price_string[0])?;
+        let price_type_second = _get_base_price_type(splitted_raw_price_string[1])?;
+        price_type = PriceType::DualPrice(price_type_first, price_type_second)
+    } else {
+        let price_type_first = _get_base_price_type(raw_price_string)?;
+        price_type = PriceType::SinglePrice(price_type_first)
+    }
 
     // Matching on the PriceType
     let aggregation_period = match input_args.get(2).unwrap() as &str {
@@ -122,7 +158,8 @@ pub fn get_input() -> Result<InputArgs, errors::InputError> {
     })
 }
 
-pub fn stdin() -> std::io::Result<String> {
+pub fn stdin(prompt: &str) -> std::io::Result<String> {
+    println!("{}", prompt);
     let mut s = String::new();
     let _ = std::io::stdout().flush(); // Performing flushing of the output buffer
     std::io::stdin().read_line(&mut s)?; // Reading a single line of input
