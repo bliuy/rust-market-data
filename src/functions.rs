@@ -75,7 +75,7 @@ pub mod AggregationFunctions {
     use super::*;
 
     // Defining custom types
-    type AggregationResult<T, U> = std::collections::HashMap<T, U>;
+    pub type AggregationResult<T, U> = std::collections::HashMap<T, U>;
 
     pub fn max<'a, T, U>(
         groupby: Grouping::GroupedBy<'a, T, U>,
@@ -220,21 +220,21 @@ mod tests {
         }
     }
 
-    #[test]
-    fn visualize_aggregationfunctions_max() {
-        let foo = datasets::structs::TickerInfo::new(
-            "EEM",
-            "2021-03-29 00:00:00",
-            "2022-04-29 00:00:00",
-            enums::Currency::Usd,
-        )
-        .unwrap();
-        let bar = datasets::source_yahoo_finance(&foo).unwrap();
-        let quxx = bar.get_high_prevclose_pricedelta_percentage();
-        let baz = Grouping::groupby_weekly(bar.get_timestamps(), &quxx).unwrap();
-        let qux = AggregationFunctions::max(baz);
-        dbg!(qux.unwrap().values());
-    }
+    // #[test]
+    // fn visualize_aggregationfunctions_max() {
+    //     let foo = datasets::structs::TickerInfo::new(
+    //         "EEM",
+    //         "2021-03-29 00:00:00",
+    //         "2022-04-29 00:00:00",
+    //         enums::Currency::Usd,
+    //     )
+    //     .unwrap();
+    //     let bar = datasets::source_yahoo_finance(&foo).unwrap();
+    //     let quxx = bar.get_high_prevclose_pricedelta_percentage();
+    //     let baz = Grouping::groupby_weekly(bar.get_timestamps(), &quxx).unwrap();
+    //     let qux = AggregationFunctions::max(baz);
+    //     dbg!(qux.unwrap().values());
+    // }
 
     #[test]
     fn visualize_openclose_delta() {
@@ -259,23 +259,23 @@ mod tests {
         dbg!(quuz);
     }
 
-    #[test]
-    fn visualize_percentile_from_sorted_array() {
-        let foo = datasets::structs::TickerInfo::new(
-            "EEM",
-            "2022-01-01 00:00:00",
-            "2022-04-18 00:00:00",
-            enums::Currency::Usd,
-        )
-        .unwrap();
-        let bar = datasets::source_yahoo_finance(&foo).unwrap();
-        let quxx = bar.get_high_prevclose_pricedelta_percentage();
-        let baz = Grouping::groupby_weekly(bar.get_timestamps(), &quxx).unwrap();
-        let qux = AggregationFunctions::max(baz);
-        let mut quuz = qux.unwrap().into_values().collect::<Vec<_>>();
-        quuz.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let barz = percentile_from_sorted_array(55, &quuz);
-        dbg!(&quuz);
-        dbg!(barz);
-    }
+    // #[test]
+    // fn visualize_percentile_from_sorted_array() {
+    //     let foo = datasets::structs::TickerInfo::new(
+    //         "EEM",
+    //         "2022-01-01 00:00:00",
+    //         "2022-04-18 00:00:00",
+    //         enums::Currency::Usd,
+    //     )
+    //     .unwrap();
+    //     let bar = datasets::source_yahoo_finance(&foo).unwrap();
+    //     let quxx = bar.get_high_prevclose_pricedelta_percentage();
+    //     let baz = Grouping::groupby_weekly(bar.get_timestamps(), &quxx).unwrap();
+    //     let qux = AggregationFunctions::max(baz);
+    //     let mut quuz = qux.unwrap().into_values().collect::<Vec<_>>();
+    //     quuz.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    //     let barz = percentile_from_sorted_array(55, &quuz);
+    //     dbg!(&quuz);
+    //     dbg!(barz);
+    // }
 }
